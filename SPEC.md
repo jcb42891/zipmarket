@@ -11,6 +11,8 @@ This spec defines the full technical implementation to deliver ZipMarket MVP for
 - ZIP search and dashboard load
 - historical pricing and competitiveness KPIs
 - clear "not live inventory" trust/disclaimer UX
+- sleek, modern, easy-to-digest visual design
+- full light and dark theme support with parity
 - unsupported ZIP handling with nearby ZIP suggestions
 - precomputed market metrics for fast response times
 
@@ -53,6 +55,7 @@ This spec is designed to be implementation-ready.
 5. Trend window defaults to 36 months; fallback to available history if less.
 6. Persistent disclaimer appears on every ZIP dashboard.
 7. Data is precomputed and query path avoids runtime heavy aggregation.
+8. UI must be visually polished, easy to scan, and fully usable in both light and dark modes.
 
 ## 4. Technology stack
 
@@ -62,6 +65,7 @@ This spec is designed to be implementation-ready.
 - Language: TypeScript 5.x
 - Web framework: Next.js 15 (App Router)
 - UI: React 19 + Tailwind CSS 4
+- Theme system: `next-themes` + CSS custom properties (design tokens)
 - Charting: Recharts
 - Validation: Zod
 
@@ -466,12 +470,49 @@ Suggestions query:
 
 ## 13. Frontend implementation details
 
-## 13.1 Routes
+## 13.1 Design requirements
+
+Visual quality goals:
+
+- Sleek and modern look with restrained, intentional styling
+- Fast visual comprehension: strong hierarchy, clear spacing, low clutter
+- High legibility for KPI-heavy content and chart annotations
+- Consistent interaction patterns across landing and dashboard
+
+Design-system requirements:
+
+- Define semantic color tokens via CSS vars (not hard-coded per component):
+- `--bg`, `--surface`, `--text-primary`, `--text-muted`
+- `--border`, `--accent`, `--success`, `--warning`, `--danger`
+- Define spacing/radius/shadow tokens for card and chart containers.
+- Use one typography pair optimized for readability:
+- display font for section/KPI headers
+- body font for labels/tooltips/data tables
+
+Digestibility rules:
+
+- KPI strip must surface the most important numbers without requiring scroll.
+- Limit each dashboard panel to one analytic purpose.
+- Use concise labels and avoid dense explanatory text in chart areas.
+- Preserve sufficient whitespace and contrast in both themes.
+
+## 13.2 Theming and mode behavior
+
+- Light and dark modes are both first-class (no degraded dark mode).
+- Initial theme selection:
+- respect system preference on first visit
+- persist explicit user choice in local storage/cookie
+- Provide explicit theme toggle in global chrome.
+- All components (cards, tooltips, chart grids, chart lines, empty states) must read tokens and render correctly in both modes.
+- Minimum contrast target: WCAG AA for primary text and data labels in both modes.
+- Charts must provide accessible palettes in both modes; avoid low-contrast lines on dark backgrounds.
+
+## 13.3 Routes
 
 - `/` -> search landing page
 - `/zip/[zip]` -> dashboard page
 
-## 13.2 Dashboard composition
+## 13.4 Dashboard composition
 
 - Search bar (persistent at top)
 - KPI strip (latest values + deltas)
@@ -484,7 +525,7 @@ Suggestions query:
 - competitiveness card
 - disclaimer block (persistent)
 
-## 13.3 UX states
+## 13.5 UX states
 
 - Loading skeleton
 - Supported data
@@ -493,7 +534,7 @@ Suggestions query:
 - Invalid ZIP input
 - Partial data (metric-level no-data cards)
 
-## 13.4 Required copy
+## 13.6 Required copy
 
 Persistent disclaimer:
 
@@ -587,6 +628,12 @@ E2E tests (Playwright):
 - non-NJ ZIP rejection
 - disclaimer visibility on dashboard
 
+Visual/theme tests:
+
+- visual regression snapshots for critical pages in both light and dark modes
+- theme toggle persistence test across reload/navigation
+- contrast spot-check automation for core text and KPI cards
+
 Data tests:
 
 - latest period completeness checks
@@ -609,11 +656,11 @@ Week 3:
 
 Week 4:
 
-- Frontend dashboard, charts, disclaimers, unsupported states
+- Frontend dashboard, charts, disclaimers, unsupported states, design-system tokenization, and theme toggle
 
 Week 5:
 
-- competitiveness indicator, performance tuning, observability, QA hardening
+- competitiveness indicator, visual polish pass, performance tuning, observability, QA hardening
 
 Week 6:
 
@@ -649,6 +696,10 @@ Week 6:
 - latest source date no older than 35 days from current date.
 
 6. End-to-end tests pass in CI for core states.
+
+7. Light and dark modes both pass design QA:
+- no unreadable text or low-contrast chart lines
+- consistent visual hierarchy and polished appearance on desktop and mobile
 
 ## 21. Post-MVP backlog (already identified)
 
