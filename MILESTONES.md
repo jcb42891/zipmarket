@@ -38,7 +38,7 @@ Update this table as work progresses.
 | M1 | Database foundation and schema | Codex | Done | 2026-02-10 | 2026-02-10 | Schema/migrations/seeds complete with local Docker PostGIS verification (migrate, seed, tables/indexes, idempotent rerun) on port 5433. |
 | M2 | ETL scaffolding and source ingestion | Codex | Done | 2026-02-10 | 2026-02-10 | ETL runner, source snapshots/checksums, advisory locks, GeoNames + Redfin ingests, reject logging, and local idempotency verification complete. |
 | M3 | Data marts, derived metrics, and support logic | Codex | Done | 2026-02-10 | 2026-02-10 | Added marts/support SQL functions, nearest ZIP lookup, Redfin DQ gates/reporting, and verified live ingest + mart refresh on Docker PostGIS. |
-| M4 | API layer and caching | TBD | Not Started |  |  |  |
+| M4 | API layer and caching | Codex | Done | 2026-02-10 | 2026-02-11 | Added dashboard/suggestions API routes with Zod contract guards, Redis cache versioning strategy, ETag/cache-control handling, route/service/cache tests, and local endpoint verification. |
 | M5 | Frontend shell and ZIP search flows | TBD | Not Started |  |  |  |
 | M6 | Dashboard charts, segmentation, and indicator UX | TBD | Not Started |  |  |  |
 | M7 | Reliability, observability, and security hardening | TBD | Not Started |  |  |  |
@@ -813,3 +813,63 @@ If handoff data is stale or missing:
   - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "WITH unsupported AS (SELECT zip_code FROM dim_zip WHERE is_nj AND NOT is_supported ORDER BY zip_code LIMIT 1) SELECT unsupported.zip_code AS input_zip, suggestion.zip_code AS suggested_zip, suggestion.distance_miles FROM unsupported CROSS JOIN LATERAL find_nearest_supported_zips(unsupported.zip_code, 5) AS suggestion;"`
 - Next exact step:
   - Start M4 (API layer and caching) on a new PR branch using the new marts and nearest ZIP SQL function as the API read surface.
+
+### Handoff - 2026-02-10 22:53 (local)
+
+- Active milestone: M4
+- Branch: main
+- Last commit: 68155e4
+- Completed since last handoff:
+  - Implemented `GET /api/v1/dashboard/{zip}` route in `apps/web` with ZIP/query validation (`segment`, `months`) and response-state handling for supported, unsupported, non-NJ, and not-found ZIPs.
+  - Implemented `GET /api/v1/zips/{zip}/suggestions` route in `apps/web` with ZIP validation and NJ/not-found handling.
+  - Added Zod API contracts/response guards and a consistent error envelope shape for 400/404/500 responses.
+  - Added DB-backed dashboard/suggestions service layer that reads from `dim_zip`, `mart_zip_dashboard_latest`, `mart_zip_dashboard_series`, and `find_nearest_supported_zips`.
+  - Adjusted M4 web DB access to use a local `pg` client/service implementation in `apps/web` (instead of importing runtime code from `@zipmarket/db`) to satisfy Next.js route runtime module resolution constraints.
+  - Added cache module with Redis REST support, versioned key strategy (`CACHE_DATA_VERSION`), `Cache-Control`, and `ETag`/`If-None-Match` handling.
+  - Added endpoint and service/cache tests covering:
+    - valid supported ZIP
+    - unsupported NJ ZIP
+    - non-NJ ZIP
+    - invalid ZIP format
+    - suggestions endpoint behaviors
+  - Added caching behavior documentation and updated root docs/env scaffolding for M4.
+  - Ran live local API smoke checks against `next dev` + local Postgres and verified expected status branches plus `304` ETag behavior.
+- In progress:
+  - None.
+- Blockers/risks:
+  - Staging load-test validation for p95 API latency (<250ms) is still pending; local unit/route tests pass.
+  - Redis cache behavior in production mode requires valid `REDIS_URL`/`REDIS_TOKEN` runtime secrets.
+- Decisions made:
+  - Implemented M4 as a single PR-sized diff because route surface, caching layer, and tests fit coherently in one reviewable change set.
+  - Used versioned cache keys (`CACHE_DATA_VERSION`) for non-destructive invalidation instead of key-pattern deletes.
+- Files changed:
+  - `.env.example`
+  - `README.md`
+  - `apps/web/package.json`
+  - `package-lock.json`
+  - `apps/web/app/api/v1/dashboard/[zip]/route.ts`
+  - `apps/web/app/api/v1/dashboard/[zip]/route.test.ts`
+  - `apps/web/app/api/v1/zips/[zip]/suggestions/route.ts`
+  - `apps/web/app/api/v1/zips/[zip]/suggestions/route.test.ts`
+  - `apps/web/lib/api/dashboard-route.ts`
+  - `apps/web/lib/api/zip-suggestions-route.ts`
+  - `apps/web/lib/api/contracts.ts`
+  - `apps/web/lib/api/dashboard-service.ts`
+  - `apps/web/lib/api/dashboard-service.test.ts`
+  - `apps/web/lib/api/cache.ts`
+  - `apps/web/lib/api/cache.test.ts`
+  - `apps/web/lib/api/http.ts`
+  - `apps/web/docs/m4-caching.md`
+  - `MILESTONES.md`
+- Commands run for verification:
+  - `npm install`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run test`
+  - `npm run db:up`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT (SELECT COUNT(*) FROM dim_zip) AS dim_zip_count, (SELECT COUNT(*) FROM mart_zip_dashboard_latest) AS latest_count; SELECT BTRIM(zip_code) AS supported_zip FROM dim_zip WHERE is_nj AND is_supported ORDER BY zip_code LIMIT 1; SELECT BTRIM(zip_code) AS unsupported_zip FROM dim_zip WHERE is_nj AND NOT is_supported ORDER BY zip_code LIMIT 1; SELECT BTRIM(zip_code) AS non_nj_zip FROM dim_zip WHERE NOT is_nj ORDER BY zip_code LIMIT 1;"`
+  - `npm run dev -w @zipmarket/web`
+  - `node -e "...fetch /api/v1/dashboard/{supported|unsupported|non_nj|invalid} and /api/v1/zips/{zip}/suggestions smoke checks..."`
+  - `node -e "...fetch dashboard endpoint twice with If-None-Match to verify 304..."`
+- Next exact step:
+  - Start M5 (frontend shell and ZIP search flows) on a new PR branch using the new M4 endpoints as the data contract.

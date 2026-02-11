@@ -57,9 +57,16 @@ Copy `.env.example` to `.env.local` for local app configuration.
 cp .env.example .env.local
 ```
 
+## API endpoints (M4)
+
+- `GET /api/v1/dashboard/{zip}?segment=all&months=36`
+- `GET /api/v1/zips/{zip}/suggestions`
+
+Caching strategy and invalidation notes are documented in `apps/web/docs/m4-caching.md`.
+
 ## Milestone coverage
 
-Current implementation covers M0 through M3 by providing:
+Current implementation covers M0 through M4 by providing:
 
 - monorepo workspace bootstrap
 - web app and ETL entrypoints
@@ -72,6 +79,10 @@ Current implementation covers M0 through M3 by providing:
 - Mart refresh support logic for latest KPI snapshot + 36-month trailing series
 - Competitiveness score/label/explanation derivation in precomputed marts
 - PostGIS nearest-supported ZIP lookup function for unsupported ZIP fallback flows
+- Dashboard + suggestions API endpoints with ZIP/query validation and consistent error envelopes
+- Zod-guarded API response contracts for supported/unsupported/error states
+- Redis-backed API cache key strategy with data-version invalidation, `Cache-Control`, and `ETag` handling
+- API route/unit test coverage for supported ZIP, unsupported NJ ZIP, non-NJ ZIP, invalid ZIP format, and suggestions
 - lint/typecheck/test scripts across workspaces
 - theme provider baseline with `light` / `dark` / `system` support
 - CI baseline workflow for install + lint + typecheck
