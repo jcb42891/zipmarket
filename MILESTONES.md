@@ -34,7 +34,7 @@ Update this table as work progresses.
 
 | Milestone | Name | Owner | Status | Start Date | End Date | Notes |
 |---|---|---|---|---|---|---|
-| M0 | Local setup and repo bootstrap | TBD | Not Started |  |  |  |
+| M0 | Local setup and repo bootstrap | Codex | Done | 2026-02-11 | 2026-02-11 | Monorepo scaffold, web + ETL entrypoints, theme baseline, CI baseline complete. |
 | M1 | Database foundation and schema | TBD | Not Started |  |  |  |
 | M2 | ETL scaffolding and source ingestion | TBD | Not Started |  |  |  |
 | M3 | Data marts, derived metrics, and support logic | TBD | Not Started |  |  |  |
@@ -543,3 +543,41 @@ If handoff data is stale or missing:
 5. Visual direction lock:
 - final type scale and font pairing
 - final color token palette for light and dark modes
+
+### Handoff - 2026-02-10 21:04 (local)
+
+- Active milestone: M0
+- Branch: main
+- Last commit: 89a2bdd
+- Completed since last handoff:
+  - Installed dependencies and generated lockfile.
+  - Fixed workspace linting by aligning ESLint to v8 and setting `tsconfigRootDir` in root ESLint config.
+  - Switched web lint to ESLint CLI and excluded `next-env.d.ts`.
+  - Fixed web type import in theme provider.
+  - Verified `npm run lint`, `npm run typecheck`, `npm run test`, `npm run etl -- --help`, and `npm run dev` startup.
+- In progress:
+  - None.
+- Blockers/risks:
+  - Node engine warning appears locally on Node 24 because project target is Node 22 LTS.
+- Decisions made:
+  - Keep Node 22 as the project runtime target for MVP.
+  - Keep generated Next typed-route reference in `next-env.d.ts`.
+- Files changed:
+  - `.eslintrc.cjs`
+  - `.gitignore`
+  - `package.json`
+  - `package-lock.json`
+  - `apps/web/package.json`
+  - `apps/web/components/theme-provider.tsx`
+  - `apps/web/next-env.d.ts`
+  - `apps/web/tsconfig.json`
+  - `MILESTONES.md`
+- Commands run for verification:
+  - `npm install`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run test`
+  - `npm run etl -- --help`
+  - `npm run dev`
+- Next exact step:
+  - Start M1 (database foundation and schema) on a new PR branch.
