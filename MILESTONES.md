@@ -35,7 +35,7 @@ Update this table as work progresses.
 | Milestone | Name | Owner | Status | Start Date | End Date | Notes |
 |---|---|---|---|---|---|---|
 | M0 | Local setup and repo bootstrap | Codex | Done | 2026-02-11 | 2026-02-11 | Monorepo scaffold, web + ETL entrypoints, theme baseline, CI baseline complete. |
-| M1 | Database foundation and schema | TBD | Not Started |  |  |  |
+| M1 | Database foundation and schema | Codex | Done | 2026-02-10 | 2026-02-10 | Schema/migrations/seeds complete with local Docker PostGIS verification (migrate, seed, tables/indexes, idempotent rerun) on port 5433. |
 | M2 | ETL scaffolding and source ingestion | TBD | Not Started |  |  |  |
 | M3 | Data marts, derived metrics, and support logic | TBD | Not Started |  |  |  |
 | M4 | API layer and caching | TBD | Not Started |  |  |  |
@@ -581,3 +581,103 @@ If handoff data is stale or missing:
   - `npm run dev`
 - Next exact step:
   - Start M1 (database foundation and schema) on a new PR branch.
+
+### Handoff - 2026-02-10 21:18 (local)
+
+- Active milestone: M1
+- Branch: m1-database-foundation
+- Last commit: 89a2bdd
+- Completed since last handoff:
+  - Added local Postgres + PostGIS bootstrap via `docker-compose.yml`.
+  - Implemented `packages/db` migration SQL for `dim_zip`, `dim_property_type`, `fact_zip_market_monthly`, `mart_zip_dashboard_latest`, and `ingestion_run`.
+  - Added migration runner with checksum tracking table (`_zipmarket_migrations`).
+  - Added idempotent property-type seed runner for `dim_property_type`.
+  - Added `db:up`, `db:down`, `db:migrate`, `db:seed` scripts at repo root and workspace package scripts.
+  - Added DB workflow docs in `packages/db/README.md` and root README DB quickstart section.
+  - Added unit tests for env resolution, migration discovery/application behavior, seed behavior, and required schema/index assertions in migration SQL.
+- In progress:
+  - None.
+- Blockers/risks:
+  - Docker CLI is not available in this environment, so `npm run db:up` cannot run locally here.
+  - Existing local Postgres at `127.0.0.1:5432` rejects default `zipmarket` credentials, so `npm run db:migrate` and `npm run db:seed` cannot be completed against that host without credential alignment.
+- Decisions made:
+  - Keep M1 implementation in a single PR because scope stays inside DB package + local DB bootstrap/docs.
+  - Use SQL-first migrations with checksum locking to keep rebuilds deterministic.
+- Files changed:
+  - `.env.example`
+  - `README.md`
+  - `docker-compose.yml`
+  - `package.json`
+  - `package-lock.json`
+  - `packages/db/package.json`
+  - `packages/db/README.md`
+  - `packages/db/migrations/0001_init_schema.sql`
+  - `packages/db/src/index.ts`
+  - `packages/db/src/env.ts`
+  - `packages/db/src/pg-client.ts`
+  - `packages/db/src/migrations.ts`
+  - `packages/db/src/migrate.ts`
+  - `packages/db/src/property-type-seed.ts`
+  - `packages/db/src/seed.ts`
+  - `packages/db/src/cli/migrate.ts`
+  - `packages/db/src/cli/seed.ts`
+  - `packages/db/src/env.test.ts`
+  - `packages/db/src/migrations.test.ts`
+  - `packages/db/src/migrate.test.ts`
+  - `packages/db/src/seed.test.ts`
+  - `packages/db/src/schema-sql.test.ts`
+  - `MILESTONES.md`
+- Commands run for verification:
+  - `npm install`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run test`
+  - `npm run db:up` (fails locally: `docker` command not found)
+  - `npm run db:migrate` (fails locally: Postgres auth for user `zipmarket`)
+  - `npm run db:seed` (fails locally: Postgres auth for user `zipmarket`)
+- Next exact step:
+  - Run `npm run db:up && npm run db:migrate && npm run db:seed` on a machine with Docker/PostGIS and matching DB credentials, then execute the SQL table/index checks in `packages/db/README.md`.
+
+### Handoff - 2026-02-10 21:32 (local)
+
+- Active milestone: M1
+- Branch: m1-database-foundation
+- Last commit: 89a2bdd
+- Completed since last handoff:
+  - Installed Docker Desktop and WSL runtime; after reboot, verified Docker engine health.
+  - Identified host Postgres conflict on `127.0.0.1:5432` and moved local Docker mapping/default DB URL to `5433`.
+  - Verified `npm run db:up`, `npm run db:migrate`, and `npm run db:seed` against Docker PostGIS.
+  - Verified expected M1 tables and indexes through SQL checks.
+  - Re-ran migration and seed to confirm idempotent behavior (`Applied=0 Skipped=1`, seeded rows remain 5).
+  - Re-ran `npm run lint`, `npm run typecheck`, and `npm run test` with all checks passing.
+- In progress:
+  - None.
+- Blockers/risks:
+  - None for M1.
+- Decisions made:
+  - Keep local Docker PostGIS on host port `5433` to avoid collisions with an existing local Postgres service on `5432`.
+- Files changed:
+  - `.env.example`
+  - `docker-compose.yml`
+  - `packages/db/README.md`
+  - `packages/db/src/env.ts`
+  - `MILESTONES.md`
+- Commands run for verification:
+  - `docker --version`
+  - `docker compose version`
+  - `docker info`
+  - `npm run db:down`
+  - `npm run db:up`
+  - `npm run db:migrate`
+  - `npm run db:seed`
+  - `psql -w -h 127.0.0.1 -p 5433 -U zipmarket -d zipmarket -c "SELECT property_type_key, source_property_type, is_mvp_exposed FROM dim_property_type ORDER BY property_type_key;"`
+  - `psql -w -h 127.0.0.1 -p 5433 -U zipmarket -d zipmarket -c "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('dim_zip','dim_property_type','fact_zip_market_monthly','mart_zip_dashboard_latest','ingestion_run') ORDER BY tablename;"`
+  - `psql -w -h 127.0.0.1 -p 5433 -U zipmarket -d zipmarket -c "SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname IN ('idx_fact_zip_market_monthly_zip_property_period_end_desc','idx_fact_zip_market_monthly_period_end_desc','idx_dim_zip_is_supported_is_nj','idx_dim_zip_geog_gist') ORDER BY indexname;"`
+  - `npm run db:migrate`
+  - `npm run db:seed`
+  - `psql -w -h 127.0.0.1 -p 5433 -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS property_type_count FROM dim_property_type;"`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run test`
+- Next exact step:
+  - Start M2 (ETL scaffolding and source ingestion) on a new PR branch.

@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: zipmarket-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zipmarket
+      POSTGRES_USER: zipmarket
+      POSTGRES_PASSWORD: zipmarket
+    ports:
+      - "5433:5432"
+    volumes:
+      - zipmarket-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zipmarket -d zipmarket"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  zipmarket-db-data:

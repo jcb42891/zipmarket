@@ -29,6 +29,16 @@ In a separate terminal:
 npm run etl -- --help
 ```
 
+## Local database (Postgres + PostGIS)
+
+```bash
+npm run db:up
+npm run db:migrate
+npm run db:seed
+```
+
+Use `npm run db:down` to stop the local database service.
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` for local app configuration.
@@ -47,4 +57,3 @@ This baseline satisfies M0 by providing:
 - lint/typecheck/test scripts across workspaces
 - theme provider baseline with `light` / `dark` / `system` support
 - CI baseline workflow for install + lint + typecheck
-
