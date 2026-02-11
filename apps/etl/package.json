@@ -5,14 +5,20 @@
   "type": "module",
   "scripts": {
     "etl": "tsx src/cli.ts",
+    "etl:geonames": "tsx src/cli.ts geonames",
+    "etl:redfin": "tsx src/cli.ts redfin",
+    "etl:run-all": "tsx src/cli.ts run-all",
     "dev": "tsx watch src/cli.ts",
     "lint": "eslint src --ext .ts --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests yet for @zipmarket/etl\""
+    "test": "tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@zipmarket/db": "*",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
 }
-

@@ -36,7 +36,7 @@ Update this table as work progresses.
 |---|---|---|---|---|---|---|
 | M0 | Local setup and repo bootstrap | Codex | Done | 2026-02-11 | 2026-02-11 | Monorepo scaffold, web + ETL entrypoints, theme baseline, CI baseline complete. |
 | M1 | Database foundation and schema | Codex | Done | 2026-02-10 | 2026-02-10 | Schema/migrations/seeds complete with local Docker PostGIS verification (migrate, seed, tables/indexes, idempotent rerun) on port 5433. |
-| M2 | ETL scaffolding and source ingestion | TBD | Not Started |  |  |  |
+| M2 | ETL scaffolding and source ingestion | Codex | Done | 2026-02-10 | 2026-02-10 | ETL runner, source snapshots/checksums, advisory locks, GeoNames + Redfin ingests, reject logging, and local idempotency verification complete. |
 | M3 | Data marts, derived metrics, and support logic | TBD | Not Started |  |  |  |
 | M4 | API layer and caching | TBD | Not Started |  |  |  |
 | M5 | Frontend shell and ZIP search flows | TBD | Not Started |  |  |  |
@@ -681,3 +681,66 @@ If handoff data is stale or missing:
   - `npm run test`
 - Next exact step:
   - Start M2 (ETL scaffolding and source ingestion) on a new PR branch.
+
+### Handoff - 2026-02-10 22:07 (local)
+
+- Active milestone: M2
+- Branch: m1-database-foundation
+- Last commit: efc8b00
+- Completed since last handoff:
+  - Added M2 migration `0002_ingestion_metadata.sql` with `source_snapshot` and `ingestion_reject` tables/indexes.
+  - Implemented ETL framework in `apps/etl` with advisory lock, source download + SHA-256 checksum capture, `ingestion_run` lifecycle, reject logging, and source snapshot persistence.
+  - Implemented GeoNames ingest (`US.zip` -> `US.txt`) with ZIP metadata normalization and `dim_zip` upserts (including PostGIS geography point generation).
+  - Implemented Redfin ingest (gzipped TSV streaming parse) with NJ/ZIP/non-seasonal filters, property-type mapping, `NA` -> `NULL` normalization, metadata cross-checks against `dim_zip`, and fact upserts.
+  - Replaced ETL placeholder CLI with runnable commands and added root scripts: `etl:geonames`, `etl:redfin`, `etl:run-all`.
+  - Added unit tests for ETL env/config, source download, framework lifecycle, CLI dispatch, GeoNames parser/ingest logic, Redfin parser/ingest logic, plus DB migration SQL assertions for M2.
+  - Verified live local ingest runs on Docker PostGIS (`geonames` twice, `redfin` twice) and confirmed no duplicate fact PK rows after rerun.
+- In progress:
+  - None.
+- Blockers/risks:
+  - Redfin ingestion currently performs row-level upserts and takes several minutes per full run; batching/staging optimization may be needed in a later milestone if runtime becomes a scheduling risk.
+- Decisions made:
+  - Normalize quoted Redfin headers/cells from the live feed so parser behavior matches production schema shape.
+  - Keep ETL writes idempotent with `ON CONFLICT` upserts and rely on PK uniqueness checks for duplicate prevention verification.
+- Files changed:
+  - `README.md`
+  - `package.json`
+  - `package-lock.json`
+  - `apps/etl/package.json`
+  - `apps/etl/src/cli.ts`
+  - `apps/etl/src/env.ts`
+  - `apps/etl/src/source-download.ts`
+  - `apps/etl/src/framework.ts`
+  - `apps/etl/src/line-reader.ts`
+  - `apps/etl/src/geonames.ts`
+  - `apps/etl/src/redfin.ts`
+  - `apps/etl/src/cli.test.ts`
+  - `apps/etl/src/env.test.ts`
+  - `apps/etl/src/source-download.test.ts`
+  - `apps/etl/src/framework.test.ts`
+  - `apps/etl/src/geonames.test.ts`
+  - `apps/etl/src/redfin.test.ts`
+  - `packages/db/migrations/0002_ingestion_metadata.sql`
+  - `packages/db/src/ingestion-metadata-sql.test.ts`
+  - `packages/db/README.md`
+  - `MILESTONES.md`
+- Commands run for verification:
+  - `npm install`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run test`
+  - `npm run db:up`
+  - `npm run db:migrate`
+  - `npm run db:seed`
+  - `npm run etl -- --help`
+  - `npm run etl:geonames` (run twice)
+  - `npm run etl:redfin` (run three times: first failed due strict header parsing before quoted-header fix, then two successful runs)
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT run_id, source_name, status, started_at, finished_at, rows_read, rows_written, rows_rejected FROM ingestion_run ORDER BY started_at DESC LIMIT 5;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS fact_rows, COUNT(DISTINCT (zip_code, period_end, property_type_key)) AS distinct_pk_rows FROM fact_zip_market_monthly;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS dim_zip_rows, COUNT(DISTINCT zip_code) AS distinct_zip_rows, COUNT(*) FILTER (WHERE is_nj) AS nj_zip_rows FROM dim_zip;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(DISTINCT zip_code) FILTER (WHERE property_type_key = 'all') AS all_segment_zip_count, MIN(period_end) AS min_period_end, MAX(period_end) AS max_period_end FROM fact_zip_market_monthly;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS non_nj_fact_rows FROM fact_zip_market_monthly fact JOIN dim_zip zip ON zip.zip_code = fact.zip_code WHERE zip.state_code <> 'NJ';"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT source_name, COUNT(*) AS run_count, SUM(rows_read) AS rows_read_total, SUM(rows_written) AS rows_written_total, SUM(rows_rejected) AS rows_rejected_total FROM ingestion_run GROUP BY source_name ORDER BY source_name;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS source_snapshot_rows FROM source_snapshot; SELECT COUNT(*) AS ingestion_reject_rows FROM ingestion_reject;"`
+- Next exact step:
+  - Start M3 (data marts, derived metrics, and support logic) on a new PR branch.

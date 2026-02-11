@@ -39,6 +39,15 @@ npm run db:seed
 
 Use `npm run db:down` to stop the local database service.
 
+## ETL commands
+
+```bash
+npm run etl -- --help
+npm run etl:geonames
+npm run etl:redfin
+npm run etl:run-all
+```
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` for local app configuration.
@@ -49,11 +58,14 @@ cp .env.example .env.local
 
 ## Milestone coverage
 
-This baseline satisfies M0 by providing:
+Current implementation covers M0, M1, and M2 by providing:
 
 - monorepo workspace bootstrap
 - web app and ETL entrypoints
-- package scaffolds for shared and db code
+- database migrations + seed tooling for core schema
+- ETL ingestion runner with advisory lock, source checksums, run lifecycle logging, and reject logging
+- GeoNames ZIP metadata ingest into `dim_zip`
+- Redfin gzipped TSV ingest into `fact_zip_market_monthly`
 - lint/typecheck/test scripts across workspaces
 - theme provider baseline with `light` / `dark` / `system` support
 - CI baseline workflow for install + lint + typecheck
