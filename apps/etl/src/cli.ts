@@ -2,12 +2,17 @@ import { pathToFileURL } from "node:url";
 
 import {
   createPgClient,
+  type RefreshMartsSummary,
   type SqlExecutor
 } from "@zipmarket/db";
 
 import { resolveEtlConfig, type EtlConfig } from "./env.js";
 import { type IngestionSummary } from "./framework.js";
 import { runGeonamesIngestion } from "./geonames.js";
+import {
+  formatRedfinDataQualityReport,
+  type RedfinDataQualityReport
+} from "./redfin-data-quality.js";
 import { runRedfinIngestion } from "./redfin.js";
 
 export const HELP_TEXT = `
@@ -21,7 +26,7 @@ Usage:
 
 Commands:
   geonames   Ingest GeoNames ZIP metadata into dim_zip
-  redfin     Ingest Redfin ZIP market rows into fact_zip_market_monthly
+  redfin     Ingest Redfin ZIP market rows, run DQ checks, refresh marts
   run-all    Run geonames then redfin in sequence
 `;
 
@@ -59,6 +64,39 @@ function formatSummary(summary: IngestionSummary): string {
     `rows_rejected=${summary.rowsRejected}`,
     `checksum_sha256=${summary.sourceChecksumSha256}`
   ].join(" ");
+}
+
+function formatMartRefreshSummary(summary: RefreshMartsSummary): string {
+  return [
+    "[etl] mart refresh succeeded",
+    `updated_zip_rows=${summary.updatedZipRows}`,
+    `latest_rows=${summary.latestRows}`,
+    `series_rows=${summary.seriesRows}`
+  ].join(" ");
+}
+
+function hasRedfinDataQualityReport(
+  summary: IngestionSummary
+): summary is IngestionSummary & { dataQualityReport: RedfinDataQualityReport } {
+  const candidate = summary as { dataQualityReport?: unknown };
+  return typeof candidate.dataQualityReport === "object" && candidate.dataQualityReport !== null;
+}
+
+function hasMartRefreshSummary(
+  summary: IngestionSummary
+): summary is IngestionSummary & { martRefresh: RefreshMartsSummary } {
+  const candidate = summary as { martRefresh?: unknown };
+  return typeof candidate.martRefresh === "object" && candidate.martRefresh !== null;
+}
+
+function logRedfinPostIngestDetails(summary: IngestionSummary, log: (message: string) => void): void {
+  if (hasRedfinDataQualityReport(summary)) {
+    log(formatRedfinDataQualityReport(summary.dataQualityReport));
+  }
+
+  if (hasMartRefreshSummary(summary)) {
+    log(formatMartRefreshSummary(summary.martRefresh));
+  }
 }
 
 export function createDefaultDependencies(): CliDependencies {
@@ -101,6 +139,7 @@ export async function executeCli(
         await dependencies.withConnectedExecutor(config.databaseUrl, async (executor) => {
           const summary = await dependencies.runRedfin(executor, config);
           dependencies.log(formatSummary(summary));
+          logRedfinPostIngestDetails(summary, dependencies.log);
         });
         return 0;
       }
@@ -110,6 +149,7 @@ export async function executeCli(
           dependencies.log(formatSummary(geonamesSummary));
           const redfinSummary = await dependencies.runRedfin(executor, config);
           dependencies.log(formatSummary(redfinSummary));
+          logRedfinPostIngestDetails(redfinSummary, dependencies.log);
         });
         return 0;
       }

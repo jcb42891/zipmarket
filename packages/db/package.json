@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts",
     "db:migrate": "tsx src/cli/migrate.ts",
-    "db:seed": "tsx src/cli/seed.ts"
+    "db:seed": "tsx src/cli/seed.ts",
+    "db:refresh-marts": "tsx src/cli/refresh-marts.ts"
   },
   "dependencies": {
     "pg": "^8.16.3"

@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { createGunzip } from "node:zlib";
 
-import type { SqlExecutor } from "@zipmarket/db";
+import { refreshMarts, type RefreshMartsSummary, type SqlExecutor } from "@zipmarket/db";
 
 import {
   runIngestionJob,
@@ -9,6 +9,10 @@ import {
   type IngestionSummary
 } from "./framework.js";
 import { readLines, type LineRecord } from "./line-reader.js";
+import {
+  evaluateRedfinDataQuality,
+  type RedfinDataQualityReport
+} from "./redfin-data-quality.js";
 
 const REDFIN_ADVISORY_LOCK_KEY = 209002;
 
@@ -138,6 +142,11 @@ export type ParseRedfinLineResult =
   | { kind: "skip" }
   | { kind: "reject"; reason: string }
   | { kind: "record"; record: RedfinNormalizedRecord };
+
+export interface RedfinIngestionSummary extends IngestionSummary {
+  dataQualityReport: RedfinDataQualityReport;
+  martRefresh: RefreshMartsSummary;
+}
 
 function normalizeNullableNumber(rawValue: string): number | null | "invalid" {
   const normalized = rawValue.trim();
@@ -499,8 +508,13 @@ export async function ingestRedfinLines(
 export async function runRedfinIngestion(
   executor: SqlExecutor,
   sourceUrl: string
-): Promise<IngestionSummary> {
-  return runIngestionJob(
+): Promise<RedfinIngestionSummary> {
+  let rowsRead = 0;
+  let rowsRejected = 0;
+  let dataQualityReport: RedfinDataQualityReport | null = null;
+  let martRefreshSummary: RefreshMartsSummary | null = null;
+
+  const summary = await runIngestionJob(
     executor,
     {
       sourceName: "redfin",
@@ -511,8 +525,46 @@ export async function runRedfinIngestion(
       execute: async (context) => {
         const zipStateByZip = await loadZipStateMap(context.executor);
         const sourceStream = createRedfinSourceStream(context.downloadedSource.filePath);
-        await ingestRedfinLines(readLines(sourceStream), zipStateByZip, context);
+        await ingestRedfinLines(readLines(sourceStream), zipStateByZip, {
+          ...context,
+          incrementRowsRead: (count = 1) => {
+            rowsRead += count;
+            context.incrementRowsRead(count);
+          },
+          reject: async (record) => {
+            rowsRejected += 1;
+            await context.reject(record);
+          }
+        });
+
+        dataQualityReport = await evaluateRedfinDataQuality(context.executor, {
+          runId: context.runId,
+          rowsRead,
+          rowsRejected
+        });
+
+        if (dataQualityReport.hardFailureReasons.length > 0) {
+          throw new Error(
+            `Redfin data quality hard-fail: ${dataQualityReport.hardFailureReasons.join("; ")}`
+          );
+        }
+
+        martRefreshSummary = await refreshMarts(context.executor);
       }
     }
   );
+
+  if (!dataQualityReport) {
+    throw new Error("Expected Redfin data quality report to be generated.");
+  }
+
+  if (!martRefreshSummary) {
+    throw new Error("Expected marts refresh to run after Redfin ingestion.");
+  }
+
+  return {
+    ...summary,
+    dataQualityReport,
+    martRefresh: martRefreshSummary
+  };
 }

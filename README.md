@@ -35,6 +35,7 @@ npm run etl -- --help
 npm run db:up
 npm run db:migrate
 npm run db:seed
+npm run db:refresh-marts
 ```
 
 Use `npm run db:down` to stop the local database service.
@@ -58,7 +59,7 @@ cp .env.example .env.local
 
 ## Milestone coverage
 
-Current implementation covers M0, M1, and M2 by providing:
+Current implementation covers M0 through M3 by providing:
 
 - monorepo workspace bootstrap
 - web app and ETL entrypoints
@@ -66,6 +67,11 @@ Current implementation covers M0, M1, and M2 by providing:
 - ETL ingestion runner with advisory lock, source checksums, run lifecycle logging, and reject logging
 - GeoNames ZIP metadata ingest into `dim_zip`
 - Redfin gzipped TSV ingest into `fact_zip_market_monthly`
+- Redfin data quality checks (hard-fail thresholds + warning signals) and report output
+- ZIP support-state recomputation (`is_supported`, `support_reason`) based on trailing data quality criteria
+- Mart refresh support logic for latest KPI snapshot + 36-month trailing series
+- Competitiveness score/label/explanation derivation in precomputed marts
+- PostGIS nearest-supported ZIP lookup function for unsupported ZIP fallback flows
 - lint/typecheck/test scripts across workspaces
 - theme provider baseline with `light` / `dark` / `system` support
 - CI baseline workflow for install + lint + typecheck

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { QueryResult, SqlExecutor } from "@zipmarket/db";
+import type { QueryResult, RefreshMartsSummary, SqlExecutor } from "@zipmarket/db";
 
 import { executeCli } from "./cli.js";
 import type { CliDependencies } from "./cli.js";
 import type { IngestionSummary } from "./framework.js";
+import type { RedfinDataQualityReport } from "./redfin-data-quality.js";
 
 class FakeExecutor implements SqlExecutor {
   public async query<Row = unknown>(): Promise<QueryResult<Row>> {
@@ -103,4 +104,64 @@ test("executeCli run-all executes geonames then redfin", async () => {
   assert.deepEqual(callOrder, ["geonames", "redfin"]);
   assert.equal(logs.length, 2);
   assert.equal(errors.length, 0);
+});
+
+test("executeCli redfin logs data quality and mart refresh details when present", async () => {
+  const logs: string[] = [];
+  const errors: string[] = [];
+  const executor = new FakeExecutor();
+
+  const dataQualityReport: RedfinDataQualityReport = {
+    runId: "redfin-run",
+    rowsRead: 10,
+    rowsRejected: 0,
+    parseErrorRate: 0,
+    latestPeriodEnd: "2026-01-31",
+    previousLatestPeriodEnd: "2025-12-31",
+    latestNjRowCount: 617,
+    previousLatestNjRowCount: 615,
+    unknownPropertyTypeRejects: 0,
+    coreMetricCoverage: {
+      medianSalePrice: 0.99,
+      homesSold: 0.98,
+      avgSaleToList: 1,
+      soldAboveList: 0.97
+    },
+    warnings: [],
+    hardFailureReasons: []
+  };
+
+  const martRefresh: RefreshMartsSummary = {
+    updatedZipRows: 10,
+    latestRows: 40,
+    seriesRows: 1200
+  };
+
+  const redfinSummaryWithExtras = {
+    ...makeSummary("redfin"),
+    dataQualityReport,
+    martRefresh
+  };
+
+  const dependencies: CliDependencies = {
+    resolveConfig: () => TEST_CONFIG,
+    runGeonames: async () => makeSummary("geonames"),
+    runRedfin: async () => redfinSummaryWithExtras,
+    withConnectedExecutor: async (_databaseUrl, handler) => handler(executor),
+    log: (message) => {
+      logs.push(message);
+    },
+    error: (message) => {
+      errors.push(message);
+    }
+  };
+
+  const exitCode = await executeCli(["redfin"], dependencies);
+
+  assert.equal(exitCode, 0);
+  assert.equal(errors.length, 0);
+  assert.equal(logs.length, 3);
+  assert.match(logs[0] ?? "", /\[etl\] redfin succeeded/);
+  assert.match(logs[1] ?? "", /redfin data_quality/);
+  assert.match(logs[2] ?? "", /mart refresh succeeded/);
 });

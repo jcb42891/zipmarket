@@ -37,7 +37,7 @@ Update this table as work progresses.
 | M0 | Local setup and repo bootstrap | Codex | Done | 2026-02-11 | 2026-02-11 | Monorepo scaffold, web + ETL entrypoints, theme baseline, CI baseline complete. |
 | M1 | Database foundation and schema | Codex | Done | 2026-02-10 | 2026-02-10 | Schema/migrations/seeds complete with local Docker PostGIS verification (migrate, seed, tables/indexes, idempotent rerun) on port 5433. |
 | M2 | ETL scaffolding and source ingestion | Codex | Done | 2026-02-10 | 2026-02-10 | ETL runner, source snapshots/checksums, advisory locks, GeoNames + Redfin ingests, reject logging, and local idempotency verification complete. |
-| M3 | Data marts, derived metrics, and support logic | TBD | Not Started |  |  |  |
+| M3 | Data marts, derived metrics, and support logic | Codex | Done | 2026-02-10 | 2026-02-10 | Added marts/support SQL functions, nearest ZIP lookup, Redfin DQ gates/reporting, and verified live ingest + mart refresh on Docker PostGIS. |
 | M4 | API layer and caching | TBD | Not Started |  |  |  |
 | M5 | Frontend shell and ZIP search flows | TBD | Not Started |  |  |  |
 | M6 | Dashboard charts, segmentation, and indicator UX | TBD | Not Started |  |  |  |
@@ -744,3 +744,72 @@ If handoff data is stale or missing:
   - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS source_snapshot_rows FROM source_snapshot; SELECT COUNT(*) AS ingestion_reject_rows FROM ingestion_reject;"`
 - Next exact step:
   - Start M3 (data marts, derived metrics, and support logic) on a new PR branch.
+
+### Handoff - 2026-02-10 22:37 (local)
+
+- Active milestone: M3
+- Branch: m2
+- Last commit: 7e28e62
+- Completed since last handoff:
+  - Added M3 migration `0003_m3_data_marts_and_support_logic.sql` with:
+    - `mart_zip_dashboard_series` table and index for trailing rowset reads.
+    - `refresh_zipmarket_marts()` to recompute `dim_zip.is_supported/support_reason` and rebuild latest + 36-month marts.
+    - competitiveness helper SQL functions (`score`, `label`, `explanation`, `confidence_tier`).
+    - `find_nearest_supported_zips()` PostGIS + numeric fallback lookup.
+  - Added DB runtime support for marts:
+    - `packages/db/src/marts.ts` helper (`refreshMarts`, `findNearestSupportedZips`).
+    - `packages/db/src/cli/refresh-marts.ts` CLI entrypoint.
+    - root/workspace scripts: `db:refresh-marts`.
+  - Integrated Redfin M3 post-ingest flow:
+    - new `apps/etl/src/redfin-data-quality.ts` implementing SPEC 8.4 gates (hard fail + warnings).
+    - `runRedfinIngestion` now runs DQ evaluation and mart refresh before marking run success.
+    - ETL CLI now prints DQ report output and mart refresh summary.
+  - Added unit tests for all new code paths:
+    - DB migration assertions + marts helper tests.
+    - Redfin DQ evaluator tests.
+    - CLI test coverage for redfin DQ/mart logs.
+  - Updated documentation (`README.md`, `packages/db/README.md`) for M3 capabilities and commands.
+- In progress:
+  - None.
+- Blockers/risks:
+  - Redfin ingestion remains row-level upsert and still takes several minutes per full run; batching/staging may be needed if runtime SLO pressure increases.
+- Decisions made:
+  - M3 was split into three PR-sized tracks (schema/refresh foundation, ETL DQ integration, tests/docs) and implemented sequentially in this session.
+  - Used deterministic table-refresh marts via SQL function instead of materialized view refresh concurrency for simpler reproducibility.
+  - Treated parse error rate and latest-period regression as hard-fail gates; row-count drops/core metric coverage/unknown property types as warnings.
+- Files changed:
+  - `README.md`
+  - `package.json`
+  - `apps/etl/src/cli.ts`
+  - `apps/etl/src/cli.test.ts`
+  - `apps/etl/src/redfin.ts`
+  - `apps/etl/src/redfin-data-quality.ts`
+  - `apps/etl/src/redfin-data-quality.test.ts`
+  - `packages/db/package.json`
+  - `packages/db/README.md`
+  - `packages/db/migrations/0003_m3_data_marts_and_support_logic.sql`
+  - `packages/db/src/index.ts`
+  - `packages/db/src/marts.ts`
+  - `packages/db/src/marts.test.ts`
+  - `packages/db/src/m3-marts-sql.test.ts`
+  - `packages/db/src/cli/refresh-marts.ts`
+  - `MILESTONES.md`
+- Commands run for verification:
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run test`
+  - `npm run db:up`
+  - `npm run db:migrate`
+  - `npm run db:seed`
+  - `npm run db:refresh-marts` (first attempt raced `db:migrate` when run in parallel; sequential rerun succeeded)
+  - `npm run etl:geonames`
+  - `npm run etl:redfin`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS supported_nj_zips FROM dim_zip WHERE is_nj AND is_supported; SELECT support_reason, COUNT(*) AS zip_count FROM dim_zip WHERE is_nj AND NOT is_supported GROUP BY support_reason ORDER BY zip_count DESC;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "WITH latest AS (SELECT DISTINCT ON (zip_code, property_type_key) zip_code, property_type_key, period_end, avg_sale_to_list FROM fact_zip_market_monthly ORDER BY zip_code, property_type_key, period_end DESC) SELECT COUNT(*) AS mismatched_sale_to_list_pct FROM mart_zip_dashboard_latest mart JOIN latest ON latest.zip_code = mart.zip_code AND latest.property_type_key = mart.property_type_key WHERE (mart.sale_to_list_pct_over_under IS DISTINCT FROM ((latest.avg_sale_to_list - 1) * 100)::numeric);"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "WITH latest AS (SELECT DISTINCT ON (f.zip_code, f.property_type_key) f.zip_code, f.property_type_key, f.avg_sale_to_list, f.sold_above_list, f.new_listings_yoy, f.homes_sold_yoy FROM fact_zip_market_monthly f ORDER BY f.zip_code, f.property_type_key, f.period_end DESC), expected AS (SELECT latest.zip_code, latest.property_type_key, CASE WHEN latest.avg_sale_to_list IS NULL OR latest.sold_above_list IS NULL THEN NULL ELSE (CASE WHEN latest.avg_sale_to_list >= 1.05 THEN 3 WHEN latest.avg_sale_to_list >= 1.02 THEN 2 WHEN latest.avg_sale_to_list >= 1.00 THEN 1 WHEN latest.avg_sale_to_list >= 0.98 THEN 0 ELSE -1 END) + (CASE WHEN latest.sold_above_list >= 0.60 THEN 3 WHEN latest.sold_above_list >= 0.45 THEN 2 WHEN latest.sold_above_list >= 0.30 THEN 1 WHEN latest.sold_above_list >= 0.15 THEN 0 ELSE -1 END) + (CASE WHEN latest.new_listings_yoy IS NULL THEN 0 WHEN latest.new_listings_yoy <= -0.15 THEN 2 WHEN latest.new_listings_yoy <= -0.05 THEN 1 WHEN latest.new_listings_yoy < 0.05 THEN 0 WHEN latest.new_listings_yoy < 0.15 THEN -1 ELSE -2 END) + (CASE WHEN latest.homes_sold_yoy IS NULL THEN 0 WHEN latest.homes_sold_yoy >= 0.10 THEN 1 WHEN latest.homes_sold_yoy <= -0.10 THEN -1 ELSE 0 END) END AS expected_score FROM latest) SELECT COUNT(*) AS competitiveness_score_mismatches FROM mart_zip_dashboard_latest mart JOIN expected ON expected.zip_code = mart.zip_code AND expected.property_type_key = mart.property_type_key WHERE mart.competitiveness_score IS DISTINCT FROM expected.expected_score;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "SELECT COUNT(*) AS bad_competitiveness_labels FROM mart_zip_dashboard_latest WHERE competitiveness_score IS NOT NULL AND (competitiveness_label IS DISTINCT FROM CASE WHEN competitiveness_score <= 0 THEN 'Buyer-leaning' WHEN competitiveness_score <= 3 THEN 'Balanced' WHEN competitiveness_score <= 6 THEN 'Competitive' ELSE 'Very competitive' END);"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "WITH bounds AS (SELECT MAX(period_end) AS latest_period_end FROM fact_zip_market_monthly WHERE property_type_key='all') SELECT MIN(period_end) AS series_min_period, MAX(period_end) AS series_max_period, COUNT(*) FILTER (WHERE period_end < (bounds.latest_period_end - INTERVAL '35 months')::date OR period_end > bounds.latest_period_end) AS out_of_window_rows FROM mart_zip_dashboard_series, bounds;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "WITH latest_period AS (SELECT MAX(period_end) AS latest_period_end FROM fact_zip_market_monthly WHERE property_type_key='all'), latest_all AS (SELECT f.zip_code, f.median_sale_price, f.homes_sold, f.avg_sale_to_list, f.sold_above_list FROM fact_zip_market_monthly f, latest_period lp WHERE f.property_type_key='all' AND f.period_end = lp.latest_period_end), trailing_counts AS (SELECT f.zip_code, COUNT(f.period_end)::int AS trailing_month_count FROM fact_zip_market_monthly f, latest_period lp WHERE f.property_type_key='all' AND f.period_end BETWEEN (lp.latest_period_end - INTERVAL '35 months')::date AND lp.latest_period_end GROUP BY f.zip_code), expected AS (SELECT z.zip_code, CASE WHEN NOT z.is_nj THEN FALSE WHEN la.zip_code IS NULL THEN FALSE WHEN COALESCE(tc.trailing_month_count, 0) < 24 THEN FALSE WHEN la.median_sale_price IS NULL OR la.homes_sold IS NULL OR la.avg_sale_to_list IS NULL OR la.sold_above_list IS NULL THEN FALSE ELSE TRUE END AS expected_is_supported, CASE WHEN NOT z.is_nj THEN 'non_nj_zip' WHEN la.zip_code IS NULL THEN 'no_recent_data' WHEN COALESCE(tc.trailing_month_count, 0) < 24 THEN 'insufficient_history' WHEN la.median_sale_price IS NULL OR la.homes_sold IS NULL OR la.avg_sale_to_list IS NULL OR la.sold_above_list IS NULL THEN 'missing_core_metrics' ELSE NULL END AS expected_support_reason FROM dim_zip z LEFT JOIN latest_all la ON la.zip_code = z.zip_code LEFT JOIN trailing_counts tc ON tc.zip_code = z.zip_code) SELECT COUNT(*) AS support_flag_mismatches FROM dim_zip z JOIN expected e ON e.zip_code = z.zip_code WHERE z.is_supported IS DISTINCT FROM e.expected_is_supported OR z.support_reason IS DISTINCT FROM e.expected_support_reason;"`
+  - `docker compose exec -T db psql -U zipmarket -d zipmarket -c "WITH unsupported AS (SELECT zip_code FROM dim_zip WHERE is_nj AND NOT is_supported ORDER BY zip_code LIMIT 1) SELECT unsupported.zip_code AS input_zip, suggestion.zip_code AS suggested_zip, suggestion.distance_miles FROM unsupported CROSS JOIN LATERAL find_nearest_supported_zips(unsupported.zip_code, 5) AS suggestion;"`
+- Next exact step:
+  - Start M4 (API layer and caching) on a new PR branch using the new marts and nearest ZIP SQL function as the API read surface.
