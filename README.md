@@ -66,7 +66,7 @@ Caching strategy and invalidation notes are documented in `apps/web/docs/m4-cach
 
 ## Milestone coverage
 
-Current implementation covers M0 through M4 by providing:
+Current implementation covers M0 through M5 by providing:
 
 - monorepo workspace bootstrap
 - web app and ETL entrypoints
@@ -83,6 +83,11 @@ Current implementation covers M0 through M4 by providing:
 - Zod-guarded API response contracts for supported/unsupported/error states
 - Redis-backed API cache key strategy with data-version invalidation, `Cache-Control`, and `ETag` handling
 - API route/unit test coverage for supported ZIP, unsupported NJ ZIP, non-NJ ZIP, invalid ZIP format, and suggestions
+- landing-page ZIP search flow with validation and dashboard route navigation
+- `/zip/[zip]` dashboard shell with loading/supported/unsupported/non-NJ/invalid states
+- persistent dashboard search bar, disclaimer block, and methodology tooltip placeholders
+- reusable frontend tokens for typography, spacing/radius/shadows, and card/container styling
+- global light/dark/system theme behavior in shared chrome with persisted selection
+- route-transition/unit smoke coverage for frontend ZIP and dashboard state mapping
 - lint/typecheck/test scripts across workspaces
-- theme provider baseline with `light` / `dark` / `system` support
 - CI baseline workflow for install + lint + typecheck

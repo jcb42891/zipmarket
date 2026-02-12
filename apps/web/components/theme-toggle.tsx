@@ -17,7 +17,7 @@ export function ThemeToggle() {
     return (
       <button
         type="button"
-        className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-muted)]"
+        className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-sm text-[var(--text-muted)]"
       >
         Theme
       </button>
@@ -31,11 +31,10 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={() => setTheme(nextMode)}
-      className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-sm font-semibold text-[var(--text-primary)]"
+      className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--accent)]"
       aria-label={`Switch theme to ${nextMode}`}
     >
       Theme: {theme ?? "system"}
     </button>
   );
 }
-

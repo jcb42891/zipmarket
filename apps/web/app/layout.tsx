@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Source_Sans_3 } from "next/font/google";
+import { GlobalChrome } from "../components/global-chrome";
 import { ThemeProvider } from "../components/theme-provider";
 import "./globals.css";
 
@@ -34,10 +35,14 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <div className="min-h-screen">
+            <GlobalChrome />
+            <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+              {children}
+            </main>
+          </div>
         </ThemeProvider>
       </body>
     </html>
   );
 }
-

@@ -1,28 +1,52 @@
-import { ThemeToggle } from "../components/theme-toggle";
+import { ZipSearchForm } from "../components/zip-search-form";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[var(--bg)] px-6 py-10 text-[var(--text-primary)]">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-        <header className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-elevated)]">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">ZipMarket</h1>
-            <ThemeToggle />
-          </div>
-          <p className="max-w-2xl text-base text-[var(--text-muted)]">
-            M0 scaffold is live. Theme tokens, provider wiring, and mode toggle
-            are ready for the dashboard implementation milestones.
+    <div className="flex flex-col gap-6">
+      <section className="grid gap-6 rounded-[var(--radius-hero)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-elevated)] lg:grid-cols-[1.15fr_0.85fr] lg:p-8">
+        <div>
+          <p className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            New Jersey ZIP dashboard
           </p>
-        </header>
-        <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
-          <h2 className="mb-2 text-xl font-semibold">Next up</h2>
-          <p className="text-[var(--text-muted)]">
-            ZIP search flow, API integration, and metric visualizations will be
-            added in M4-M6.
+          <h1 className="mt-4 font-[var(--font-display)] text-4xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-5xl">
+            Market signals for every NJ ZIP code.
+          </h1>
+          <p className="mt-4 max-w-xl text-base text-[var(--text-muted)] sm:text-lg">
+            Enter a ZIP code to open the dashboard shell and core state flows:
+            supported data, unsupported NJ suggestions, and validation feedback.
           </p>
-        </section>
-      </div>
-    </main>
+        </div>
+        <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-raised)] p-5 shadow-[var(--shadow-soft)]">
+          <ZipSearchForm helperText="Format must be 5 digits, for example 07001." />
+        </div>
+      </section>
+      <section className="grid gap-4 md:grid-cols-3">
+        {["Supported ZIP", "Unsupported NJ ZIP", "Non-NJ or invalid ZIP"].map(
+          (state) => (
+            <article
+              key={state}
+              className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]"
+            >
+              <h2 className="font-[var(--font-display)] text-lg font-semibold tracking-tight">
+                {state}
+              </h2>
+              <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Route behavior is fully wired with M4 API contracts and tested
+                state mapping.
+              </p>
+            </article>
+          )
+        )}
+      </section>
+      <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-soft)]">
+        <h2 className="font-[var(--font-display)] text-xl font-semibold tracking-tight">
+          Data scope note
+        </h2>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          ZipMarket provides historical closed-sales trends, not a real-time
+          listings feed.
+        </p>
+      </section>
+    </div>
   );
 }
-
