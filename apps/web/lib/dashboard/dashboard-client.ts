@@ -1,4 +1,4 @@
-import { ZIP_CODE_REGEX } from "@zipmarket/shared";
+import { type DashboardSegment, ZIP_CODE_REGEX } from "@zipmarket/shared";
 
 import {
   apiErrorEnvelopeSchema,
@@ -19,6 +19,12 @@ export type DashboardPageState =
 
 const FALLBACK_INTERNAL_ERROR = "Unable to load dashboard data. Please try again.";
 const FALLBACK_INVALID_ZIP = "ZIP format must be exactly 5 digits.";
+
+interface FetchDashboardStateOptions {
+  segment?: DashboardSegment;
+  months?: number;
+  fetchFn?: typeof fetch;
+}
 
 function mapApiErrorCode(zip: string, code: string, message: string): DashboardPageState {
   if (code === "INVALID_ZIP") {
@@ -99,10 +105,26 @@ export function mapDashboardResponse(
 
 export async function fetchDashboardState(
   zip: string,
-  fetchFn: typeof fetch = fetch
+  options: FetchDashboardStateOptions = {}
 ): Promise<DashboardPageState> {
+  const fetchFn = options.fetchFn ?? fetch;
+  const searchParams = new URLSearchParams();
+
+  if (options.segment) {
+    searchParams.set("segment", options.segment);
+  }
+
+  if (typeof options.months === "number") {
+    searchParams.set("months", String(options.months));
+  }
+
+  const query = searchParams.toString();
+  const requestPath = query
+    ? `/api/v1/dashboard/${zip}?${query}`
+    : `/api/v1/dashboard/${zip}`;
+
   try {
-    const response = await fetchFn(`/api/v1/dashboard/${zip}`, {
+    const response = await fetchFn(requestPath, {
       headers: {
         accept: "application/json"
       },

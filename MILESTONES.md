@@ -39,8 +39,8 @@ Update this table as work progresses.
 | M2 | ETL scaffolding and source ingestion | Codex | Done | 2026-02-10 | 2026-02-10 | ETL runner, source snapshots/checksums, advisory locks, GeoNames + Redfin ingests, reject logging, and local idempotency verification complete. |
 | M3 | Data marts, derived metrics, and support logic | Codex | Done | 2026-02-10 | 2026-02-10 | Added marts/support SQL functions, nearest ZIP lookup, Redfin DQ gates/reporting, and verified live ingest + mart refresh on Docker PostGIS. |
 | M4 | API layer and caching | Codex | Done | 2026-02-10 | 2026-02-11 | Added dashboard/suggestions API routes with Zod contract guards, Redis cache versioning strategy, ETag/cache-control handling, route/service/cache tests, and local endpoint verification. |
-| M5 | Frontend shell and ZIP search flows | TBD | Not Started |  |  |  |
-| M6 | Dashboard charts, segmentation, and indicator UX | TBD | Not Started |  |  |  |
+| M5 | Frontend shell and ZIP search flows | Codex | Done | 2026-02-11 | 2026-02-11 | Homepage and `/zip/[zip]` shell flows, persistent search/disclaimer, and theme-aware dashboard state handling shipped in commit `58c9cc3`. |
+| M6 | Dashboard charts, segmentation, and indicator UX | Codex | Ready for Review | 2026-02-11 |  | KPI deltas, chart suite, segment controls, competitiveness card, and finalized metric tooltip copy implemented with unit coverage. |
 | M7 | Reliability, observability, and security hardening | TBD | Not Started |  |  |  |
 | M8 | QA, performance validation, and release readiness | TBD | Not Started |  |  |  |
 | M9 | MVP launch and post-launch stabilization | TBD | Not Started |  |  |  |
@@ -873,3 +873,50 @@ If handoff data is stale or missing:
   - `node -e "...fetch dashboard endpoint twice with If-None-Match to verify 304..."`
 - Next exact step:
   - Start M5 (frontend shell and ZIP search flows) on a new PR branch using the new M4 endpoints as the data contract.
+
+### Handoff - 2026-02-11 21:38 (local)
+
+- Active milestone: M6
+- Branch: main
+- Last commit: 58c9cc3
+- Completed since last handoff:
+  - Implemented M6 dashboard UI in `apps/web/components/zip-dashboard-shell.tsx`:
+    - KPI strip with latest values and MoM/YoY deltas.
+    - Segment controls (`all`, `single_family`, `condo_coop`, `townhouse`) wired to dashboard API query params.
+    - Five trend charts (list vs sale price, sale-to-list, sold-over-list, new listings, sales volume) with light/dark readable palettes.
+    - Competitiveness card showing label, score, explanation, and confidence tier.
+  - Added metric presentation and tooltip-copy utilities in `apps/web/lib/dashboard/dashboard-presenter.ts`.
+  - Added M6 unit tests in `apps/web/lib/dashboard/dashboard-presenter.test.ts` and expanded dashboard-client tests for segment query handling.
+  - Updated `apps/web/components/dashboard-disclaimer.tsx` to replace placeholder tooltip chips with finalized metric/methodology copy.
+  - Added chart color tokens in `apps/web/app/globals.css` for theme parity.
+  - Updated `README.md` milestone coverage and advanced status tracking in `MILESTONES.md` (M5 done, M6 ready for review).
+- In progress:
+  - None.
+- Blockers/risks:
+  - Dashboard route JS payload increased after adding charts (`/zip/[zip]` first-load JS reported as ~230 kB in local build); monitor during M8 performance validation.
+- Decisions made:
+  - Implemented M6 as a single PR-sized diff because M4 API contracts and M5 shell were already in place and allowed cohesive review.
+  - Kept dashboard tooltip copy spec-aligned and visible via metric-level info chips plus methodology disclaimer chips.
+- Files changed:
+  - `apps/web/components/zip-dashboard-shell.tsx`
+  - `apps/web/components/dashboard-disclaimer.tsx`
+  - `apps/web/lib/dashboard/dashboard-presenter.ts`
+  - `apps/web/lib/dashboard/dashboard-presenter.test.ts`
+  - `apps/web/lib/dashboard/dashboard-client.ts`
+  - `apps/web/lib/dashboard/dashboard-client.test.ts`
+  - `apps/web/app/globals.css`
+  - `apps/web/package.json`
+  - `package-lock.json`
+  - `README.md`
+  - `MILESTONES.md`
+- Commands run for verification:
+  - `npm install recharts@^2.15.0 -w @zipmarket/web`
+  - `npm run test -w @zipmarket/web`
+  - `npm run lint -w @zipmarket/web`
+  - `npm run typecheck -w @zipmarket/web`
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run test`
+  - `npm run build -w @zipmarket/web`
+- Next exact step:
+  - Review and commit this M6 PR-sized diff, then begin M7 reliability/observability/security hardening.

@@ -111,29 +111,37 @@ test("mapDashboardResponse falls back to internal_error when payload is not pars
 test("fetchDashboardState maps response payload for smoke transition coverage", async () => {
   const state = await fetchDashboardState(
     "07001",
-    async () =>
-      new Response(
-        JSON.stringify({
-          zip: "07001",
-          status: "unsupported",
-          message: "Data not available yet",
-          nearby_supported_zips: [{ zip: "07002", distance_miles: 1.3 }]
-        }),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json"
+    {
+      segment: "single_family",
+      months: 24,
+      fetchFn: async (input) => {
+        assert.equal(input, "/api/v1/dashboard/07001?segment=single_family&months=24");
+        return new Response(
+          JSON.stringify({
+            zip: "07001",
+            status: "unsupported",
+            message: "Data not available yet",
+            nearby_supported_zips: [{ zip: "07002", distance_miles: 1.3 }]
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json"
+            }
           }
-        }
-      )
+        );
+      }
+    }
   );
 
   assert.equal(state.kind, "unsupported");
 });
 
 test("fetchDashboardState handles network failures with internal_error state", async () => {
-  const state = await fetchDashboardState("07001", async () => {
-    throw new Error("network down");
+  const state = await fetchDashboardState("07001", {
+    fetchFn: async () => {
+      throw new Error("network down");
+    }
   });
 
   assert.deepEqual(state, {
@@ -141,4 +149,24 @@ test("fetchDashboardState handles network failures with internal_error state", a
     zip: "07001",
     message: "Unable to load dashboard data. Please try again."
   });
+});
+
+test("fetchDashboardState defaults to all-segment request when options are omitted", async () => {
+  let requestedPath = "";
+  await fetchDashboardState("07001", {
+    fetchFn: async (input) => {
+      requestedPath = String(input);
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: "ZIP_NOT_FOUND",
+            message: "ZIP was not found in metadata."
+          }
+        }),
+        { status: 404, headers: { "content-type": "application/json" } }
+      );
+    }
+  });
+
+  assert.equal(requestedPath, "/api/v1/dashboard/07001");
 });

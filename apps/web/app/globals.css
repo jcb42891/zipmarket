@@ -15,6 +15,13 @@
   --success: #0f7a43;
   --warning: #ac7700;
   --danger: #b2202f;
+  --chart-grid: #d6deea;
+  --chart-sale-line: #006f83;
+  --chart-list-line: #9a6c17;
+  --chart-ratio-line: #7a3fa8;
+  --chart-over-list-line: #b2202f;
+  --chart-new-listings-bar: #2f7e4f;
+  --chart-homes-sold-bar: #1f5f99;
   --radius-md: 14px;
   --radius-lg: 20px;
   --radius-xl: 28px;
@@ -38,6 +45,13 @@
   --success: #4dd68a;
   --warning: #efc54d;
   --danger: #ff8893;
+  --chart-grid: #2f435c;
+  --chart-sale-line: #4bc4dc;
+  --chart-list-line: #e7bb67;
+  --chart-ratio-line: #bba6ff;
+  --chart-over-list-line: #ff9baa;
+  --chart-new-listings-bar: #67d89b;
+  --chart-homes-sold-bar: #73b7ff;
   --shadow-soft: 0 16px 34px -24px rgba(0, 0, 0, 0.85);
   --shadow-elevated: 0 32px 64px -38px rgba(0, 0, 0, 0.92);
 }

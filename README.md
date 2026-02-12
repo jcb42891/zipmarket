@@ -66,7 +66,7 @@ Caching strategy and invalidation notes are documented in `apps/web/docs/m4-cach
 
 ## Milestone coverage
 
-Current implementation covers M0 through M5 by providing:
+Current implementation covers M0 through M6 by providing:
 
 - monorepo workspace bootstrap
 - web app and ETL entrypoints
@@ -84,8 +84,18 @@ Current implementation covers M0 through M5 by providing:
 - Redis-backed API cache key strategy with data-version invalidation, `Cache-Control`, and `ETag` handling
 - API route/unit test coverage for supported ZIP, unsupported NJ ZIP, non-NJ ZIP, invalid ZIP format, and suggestions
 - landing-page ZIP search flow with validation and dashboard route navigation
-- `/zip/[zip]` dashboard shell with loading/supported/unsupported/non-NJ/invalid states
-- persistent dashboard search bar, disclaimer block, and methodology tooltip placeholders
+- `/zip/[zip]` dashboard flow with loading/supported/unsupported/non-NJ/invalid states
+- persistent dashboard search bar, disclaimer block, and methodology tooltip guidance
+- dashboard KPI strip with latest values plus MoM/YoY deltas
+- dashboard segmentation control (`all`, `single_family`, `condo_coop`, `townhouse`) wired to API query params
+- five dashboard trend charts:
+  - list vs sale price trend
+  - sale-to-list ratio trend
+  - sold-over-list trend
+  - new listings trend
+  - sales volume trend
+- competitiveness summary card with explanation and confidence tier display
+- finalized metric tooltip copy, including rolling-window methodology note
 - reusable frontend tokens for typography, spacing/radius/shadows, and card/container styling
 - global light/dark/system theme behavior in shared chrome with persisted selection
 - route-transition/unit smoke coverage for frontend ZIP and dashboard state mapping

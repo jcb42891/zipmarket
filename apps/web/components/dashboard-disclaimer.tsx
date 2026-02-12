@@ -1,8 +1,25 @@
-const tooltipPlaceholders = [
-  "Sale-to-list ratio",
-  "Sold over list",
-  "New listings",
-  "Rolling monthly windows"
+import {
+  METRIC_TOOLTIP_COPY,
+  ROLLING_WINDOW_TOOLTIP_COPY
+} from "../lib/dashboard/dashboard-presenter";
+
+const tooltipItems = [
+  {
+    label: "Sale-to-list ratio",
+    copy: METRIC_TOOLTIP_COPY.sale_to_list_ratio
+  },
+  {
+    label: "Sold over list",
+    copy: METRIC_TOOLTIP_COPY.sold_over_list_pct
+  },
+  {
+    label: "New listings",
+    copy: METRIC_TOOLTIP_COPY.new_listings
+  },
+  {
+    label: "Rolling monthly periods",
+    copy: ROLLING_WINDOW_TOOLTIP_COPY
+  }
 ] as const;
 
 interface DashboardDisclaimerProps {
@@ -40,13 +57,13 @@ export function DashboardDisclaimer({
       </h2>
       <p className="mt-2 text-sm text-[var(--text-muted)]">{disclaimer}</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        {tooltipPlaceholders.map((item) => (
+        {tooltipItems.map((item) => (
           <span
-            key={item}
-            title={`Tooltip copy for ${item} will be finalized in M6.`}
+            key={item.label}
+            title={item.copy}
             className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-1 text-xs font-semibold text-[var(--text-muted)]"
           >
-            {item}
+            {item.label}
           </span>
         ))}
       </div>
