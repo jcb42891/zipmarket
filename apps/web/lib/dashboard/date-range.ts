@@ -25,7 +25,6 @@ interface DashboardWindowSummary {
   medianListPriceAverage: number | null;
   homesSoldTotal: number | null;
   newListingsTotal: number | null;
-  avgSaleToListAverage: number | null;
   soldAboveListAverage: number | null;
 }
 
@@ -69,6 +68,14 @@ function toRateChange(current: number | null, previous: number | null): number |
   return (current - previous) / previous;
 }
 
+function toRatio(numerator: number | null, denominator: number | null): number | null {
+  if (numerator === null || denominator === null || denominator === 0) {
+    return null;
+  }
+
+  return numerator / denominator;
+}
+
 function averageOrNull(values: Array<number | null>): number | null {
   let total = 0;
   let count = 0;
@@ -109,7 +116,6 @@ function summarizeWindow(points: DashboardSeriesPoint[]): DashboardWindowSummary
     medianListPriceAverage: averageOrNull(points.map((point) => point.medianListPrice)),
     homesSoldTotal: sumOrNull(points.map((point) => point.homesSold)),
     newListingsTotal: sumOrNull(points.map((point) => point.newListings)),
-    avgSaleToListAverage: averageOrNull(points.map((point) => point.avgSaleToList)),
     soldAboveListAverage: averageOrNull(points.map((point) => point.soldAboveList))
   };
 }
@@ -128,24 +134,24 @@ function subtractMonths(dateString: string, months: number): string {
 }
 
 function competitivenessScore(
-  avgSaleToList: number | null,
+  saleToListRatio: number | null,
   soldAboveList: number | null,
   newListingsYoy: number | null,
   homesSoldYoy: number | null
 ): number | null {
-  if (avgSaleToList === null || soldAboveList === null) {
+  if (saleToListRatio === null || soldAboveList === null) {
     return null;
   }
 
   let score = 0;
 
-  if (avgSaleToList >= 1.05) {
+  if (saleToListRatio >= 1.05) {
     score += 3;
-  } else if (avgSaleToList >= 1.02) {
+  } else if (saleToListRatio >= 1.02) {
     score += 2;
-  } else if (avgSaleToList >= 1.0) {
+  } else if (saleToListRatio >= 1.0) {
     score += 1;
-  } else if (avgSaleToList >= 0.98) {
+  } else if (saleToListRatio >= 0.98) {
     score += 0;
   } else {
     score -= 1;
@@ -209,7 +215,7 @@ function competitivenessLabel(score: number | null): string | null {
 }
 
 function competitivenessExplanation(
-  avgSaleToList: number | null,
+  saleToListRatio: number | null,
   soldAboveList: number | null,
   newListingsYoy: number | null,
   homesSoldYoy: number | null
@@ -226,10 +232,10 @@ function competitivenessExplanation(
     }
   }
 
-  if (avgSaleToList !== null) {
-    if (avgSaleToList >= 1) {
+  if (saleToListRatio !== null) {
+    if (saleToListRatio >= 1) {
       fragments.push("Prices are landing at/above asking.");
-    } else if (avgSaleToList < 0.98) {
+    } else if (saleToListRatio < 0.98) {
       fragments.push("Prices are usually landing below asking.");
     }
   }
@@ -376,9 +382,17 @@ export function buildDashboardPayloadForDateRange(
     selectedWindowSummary.medianSalePriceAverage,
     previousWindowSummary.medianSalePriceAverage
   );
+  const selectedWindowSaleToListRatio = toRatio(
+    selectedWindowSummary.medianSalePriceAverage,
+    selectedWindowSummary.medianListPriceAverage
+  );
+  const previousWindowSaleToListRatio = toRatio(
+    previousWindowSummary.medianSalePriceAverage,
+    previousWindowSummary.medianListPriceAverage
+  );
   const saleToListYoy = toRateChange(
-    selectedWindowSummary.avgSaleToListAverage,
-    previousWindowSummary.avgSaleToListAverage
+    selectedWindowSaleToListRatio,
+    previousWindowSaleToListRatio
   );
   const soldOverListYoy = toRateChange(
     selectedWindowSummary.soldAboveListAverage,
@@ -400,6 +414,10 @@ export function buildDashboardPayloadForDateRange(
     selectedPoints.length > 1
       ? toRateChange(latestPoint.medianSalePrice, firstPoint.medianSalePrice)
       : toRateChange(latestPoint.medianSalePrice, previousPoint?.medianSalePrice ?? null);
+  const latestPointSaleToListRatio = toRatio(
+    latestPoint.medianSalePrice,
+    latestPoint.medianListPrice
+  );
   const trailingWindowStart = subtractMonths(latestPoint.periodEnd, 35);
   const trailingMonthCount = sourcePoints.filter(
     (point) =>
@@ -408,10 +426,10 @@ export function buildDashboardPayloadForDateRange(
   const coreMetricsComplete =
     latestPoint.medianSalePrice !== null &&
     latestPoint.homesSold !== null &&
-    latestPoint.avgSaleToList !== null &&
+    latestPointSaleToListRatio !== null &&
     latestPoint.soldAboveList !== null;
   const score = competitivenessScore(
-    selectedWindowSummary.avgSaleToListAverage,
+    selectedWindowSaleToListRatio,
     selectedWindowSummary.soldAboveListAverage,
     newListingsYoy,
     homesSoldYoy
@@ -432,11 +450,11 @@ export function buildDashboardPayloadForDateRange(
         mom_change: medianSalePriceMom
       },
       sale_to_list_ratio: {
-        value: selectedWindowSummary.avgSaleToListAverage,
+        value: selectedWindowSaleToListRatio,
         over_under_pct:
-          selectedWindowSummary.avgSaleToListAverage === null
+          selectedWindowSaleToListRatio === null
             ? null
-            : (selectedWindowSummary.avgSaleToListAverage - 1) * 100,
+            : (selectedWindowSaleToListRatio - 1) * 100,
         yoy_change: saleToListYoy
       },
       sold_over_list_pct: {
@@ -465,7 +483,7 @@ export function buildDashboardPayloadForDateRange(
       score,
       label: competitivenessLabel(score),
       explanation: competitivenessExplanation(
-        selectedWindowSummary.avgSaleToListAverage,
+        selectedWindowSaleToListRatio,
         selectedWindowSummary.soldAboveListAverage,
         newListingsYoy,
         homesSoldYoy

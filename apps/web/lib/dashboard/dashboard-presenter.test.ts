@@ -136,15 +136,14 @@ test("buildChartRows returns aligned chart rows and percent conversion", () => {
   const rows = buildChartRows(createPayload());
 
   assert.equal(rows.length, 2);
-  assert.deepEqual(rows[0], {
-    periodEnd: "2025-11-30",
-    periodLabel: "Nov 2025",
-    medianSalePrice: 560000,
-    medianListPrice: 575000,
-    saleToListRatio: 1.01,
-    soldOverListPct: 39,
-    newListings: 20,
-    homesSold: 40
-  });
+  assert.equal(rows[0].periodEnd, "2025-11-30");
+  assert.equal(rows[0].periodLabel, "Nov 2025");
+  assert.equal(rows[0].medianSalePrice, 560000);
+  assert.equal(rows[0].medianListPrice, 575000);
+  assert.ok(Math.abs((rows[0].saleToListRatio ?? 0) - 0.9739130435) < 0.000001);
+  assert.equal(rows[0].soldOverListPct, 39);
+  assert.equal(rows[0].newListings, 20);
+  assert.equal(rows[0].homesSold, 40);
   assert.equal(rows[1].soldOverListPct, 41);
+  assert.ok(Math.abs((rows[1].saleToListRatio ?? 0) - 0.9827586207) < 0.000001);
 });

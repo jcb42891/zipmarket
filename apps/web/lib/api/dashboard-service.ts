@@ -272,6 +272,32 @@ function parseIntegerOrNull(value: unknown, fieldName: string): number | null {
   return parsed;
 }
 
+function toRatio(numerator: number | null, denominator: number | null): number | null {
+  if (numerator === null || denominator === null || denominator === 0) {
+    return null;
+  }
+
+  return numerator / denominator;
+}
+
+function toSaleToListRatioYoy(
+  medianSalePriceYoy: number | null,
+  medianListPriceYoy: number | null
+): number | null {
+  if (medianSalePriceYoy === null || medianListPriceYoy === null) {
+    return null;
+  }
+
+  const saleGrowthFactor = 1 + medianSalePriceYoy;
+  const listGrowthFactor = 1 + medianListPriceYoy;
+  if (listGrowthFactor === 0) {
+    return null;
+  }
+
+  const ratioYoy = saleGrowthFactor / listGrowthFactor - 1;
+  return Number.isFinite(ratioYoy) ? ratioYoy : null;
+}
+
 function parseDate(value: unknown, fieldName: string): string {
   if (value instanceof Date) {
     return value.toISOString().slice(0, 10);
@@ -555,6 +581,13 @@ export async function fetchDashboardWithExecutor(
 
   const latestSeriesRow = parsedSeriesRowsDescending[0];
   const seriesRows = [...parsedSeriesRowsDescending].reverse();
+  const saleToListRatio = toRatio(parsedLatestRow.medianSalePrice, parsedLatestRow.medianListPrice);
+  const saleToListOverUnderPct =
+    saleToListRatio === null ? null : (saleToListRatio - 1) * 100;
+  const saleToListRatioYoy = toSaleToListRatioYoy(
+    parsedLatestRow.medianSalePriceYoy,
+    parsedLatestRow.medianListPriceYoy
+  );
 
   return {
     type: "supported",
@@ -576,9 +609,9 @@ export async function fetchDashboardWithExecutor(
           mom_change: latestSeriesRow.medianSalePriceMom
         },
         sale_to_list_ratio: {
-          value: parsedLatestRow.avgSaleToList,
-          over_under_pct: parsedLatestRow.saleToListPctOverUnder,
-          yoy_change: parsedLatestRow.avgSaleToListYoy
+          value: saleToListRatio,
+          over_under_pct: saleToListOverUnderPct,
+          yoy_change: saleToListRatioYoy
         },
         sold_over_list_pct: {
           value_pct: toPercent(parsedLatestRow.soldAboveList),

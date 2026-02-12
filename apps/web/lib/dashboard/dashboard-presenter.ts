@@ -55,7 +55,7 @@ export const METRIC_TOOLTIP_COPY = {
   median_sale_price:
     "Historical median closed sale price by period. This is based on recorded closings, not active inventory.",
   sale_to_list_ratio:
-    "Closed-sales ratio (sale price divided by list price). A value above 1.000 means homes sold above asking on average.",
+    "Median sale-to-list ratio (median sale price divided by median list price) for each period.",
   sold_over_list_pct:
     "Share of closed sales above list price during each rolling monthly period.",
   new_listings:
@@ -163,6 +163,14 @@ export function formatPeriodLabel(periodEnd: string): string {
   return `${MONTH_LABELS[monthIndex]} ${matches[1]}`;
 }
 
+function toRatio(numerator: number | null, denominator: number | null): number | null {
+  if (numerator === null || denominator === null || denominator === 0) {
+    return null;
+  }
+
+  return numerator / denominator;
+}
+
 export interface DashboardKpiCard {
   key: keyof DashboardSupportedResponse["kpis"];
   label: string;
@@ -237,18 +245,23 @@ export interface DashboardChartRow {
 }
 
 export function buildChartRows(payload: DashboardSupportedResponse): DashboardChartRow[] {
-  return payload.series.period_end.map((periodEnd, index) => ({
-    periodEnd,
-    periodLabel: formatPeriodLabel(periodEnd),
-    medianSalePrice: payload.series.median_sale_price[index] ?? null,
-    medianListPrice: payload.series.median_list_price[index] ?? null,
-    saleToListRatio: payload.series.avg_sale_to_list[index] ?? null,
-    soldOverListPct:
-      payload.series.sold_above_list[index] === null ||
-      payload.series.sold_above_list[index] === undefined
-        ? null
-        : payload.series.sold_above_list[index] * 100,
-    newListings: payload.series.new_listings[index] ?? null,
-    homesSold: payload.series.homes_sold[index] ?? null
-  }));
+  return payload.series.period_end.map((periodEnd, index) => {
+    const medianSalePrice = payload.series.median_sale_price[index] ?? null;
+    const medianListPrice = payload.series.median_list_price[index] ?? null;
+
+    return {
+      periodEnd,
+      periodLabel: formatPeriodLabel(periodEnd),
+      medianSalePrice,
+      medianListPrice,
+      saleToListRatio: toRatio(medianSalePrice, medianListPrice),
+      soldOverListPct:
+        payload.series.sold_above_list[index] === null ||
+        payload.series.sold_above_list[index] === undefined
+          ? null
+          : payload.series.sold_above_list[index] * 100,
+      newListings: payload.series.new_listings[index] ?? null,
+      homesSold: payload.series.homes_sold[index] ?? null
+    };
+  });
 }

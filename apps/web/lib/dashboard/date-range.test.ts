@@ -110,23 +110,29 @@ test("buildDashboardPayloadForDateRange filters series and recalculates all dash
   assert.equal(rangedPayload.kpis.median_list_price.value, 515000);
   assert.equal(rangedPayload.kpis.median_sale_price.value, 507500);
   assert.ok(
-    Math.abs((rangedPayload.kpis.sale_to_list_ratio.over_under_pct ?? 0) - 1.5) < 0.000001
+    Math.abs((rangedPayload.kpis.sale_to_list_ratio.value ?? 0) - 0.9854368932) < 0.000001
+  );
+  assert.ok(
+    Math.abs((rangedPayload.kpis.sale_to_list_ratio.over_under_pct ?? 0) - -1.4563106796) <
+      0.000001
   );
   assert.equal(rangedPayload.kpis.sold_over_list_pct.value_pct, 35);
   assert.equal(rangedPayload.kpis.new_listings.value, 53);
   assert.equal(rangedPayload.kpis.homes_sold.value, 45);
 
-  assert.equal(rangedPayload.competitiveness.score, 2);
+  assert.equal(rangedPayload.competitiveness.score, 1);
   assert.equal(rangedPayload.competitiveness.label, "Balanced");
   assert.equal(
     rangedPayload.competitiveness.explanation,
-    "A meaningful share of homes are selling over list. Prices are landing at/above asking."
+    "A meaningful share of homes are selling over list. New listings are up from last year."
   );
   assert.equal(rangedPayload.competitiveness.confidence_tier, "insufficient");
 
   assert.ok(rangedPayload.kpis.median_list_price.yoy_change !== null);
   assert.ok(rangedPayload.kpis.median_sale_price.yoy_change !== null);
-  assert.ok(rangedPayload.kpis.sale_to_list_ratio.yoy_change !== null);
+  assert.ok(
+    Math.abs((rangedPayload.kpis.sale_to_list_ratio.yoy_change ?? 0) - 0.0066298343) < 0.000001
+  );
   assert.ok(rangedPayload.kpis.sold_over_list_pct.yoy_change !== null);
   assert.ok(rangedPayload.kpis.new_listings.yoy_change !== null);
   assert.ok(rangedPayload.kpis.homes_sold.yoy_change !== null);

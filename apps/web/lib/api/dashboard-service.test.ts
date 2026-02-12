@@ -145,7 +145,16 @@ test("fetchDashboardWithExecutor returns supported payload with aligned series a
 
   assert.equal(result.payload.status, "supported");
   assert.equal(result.payload.city, "Avenel");
-  assert.equal(result.payload.kpis.sale_to_list_ratio.over_under_pct, 1.5);
+  assert.ok(
+    Math.abs((result.payload.kpis.sale_to_list_ratio.value ?? 0) - 0.9745762712) < 0.000001
+  );
+  assert.ok(
+    Math.abs((result.payload.kpis.sale_to_list_ratio.over_under_pct ?? 0) - -2.5423728814) <
+      0.000001
+  );
+  assert.ok(
+    Math.abs((result.payload.kpis.sale_to_list_ratio.yoy_change ?? 0) - 0.0095238095) < 0.000001
+  );
   assert.equal(result.payload.kpis.sold_over_list_pct.value_pct, 41);
   assert.deepEqual(result.payload.series.period_end, ["2025-11-30", "2025-12-31"]);
   assert.equal(result.payload.methodology.source, "Redfin Data Center");
