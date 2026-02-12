@@ -7,6 +7,7 @@ export const DASHBOARD_SOURCE = "Redfin Data Center";
 export const DASHBOARD_WINDOW_TYPE = "rolling_monthly_aggregates";
 export const DASHBOARD_UNSUPPORTED_MESSAGE = "Data not available yet";
 export const MAX_SUGGESTIONS = 5;
+export const MAX_LOCATION_QUERY_LENGTH = 80;
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -16,6 +17,12 @@ export const dashboardQuerySchema = z.object({
 });
 
 export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;
+
+export const locationResolveQuerySchema = z.object({
+  query: z.string().trim().min(1).max(MAX_LOCATION_QUERY_LENGTH)
+});
+
+export type LocationResolveQuery = z.infer<typeof locationResolveQuerySchema>;
 
 export const suggestionSchema = z.object({
   zip: zipCodeSchema,
@@ -59,6 +66,7 @@ const dashboardKpiValueSchema = z.object({
 
 export const dashboardSupportedResponseSchema = z.object({
   zip: zipCodeSchema,
+  city: z.string().min(1).nullable().optional(),
   status: z.literal("supported"),
   segment: dashboardSegmentSchema,
   latest_period_end: isoDateSchema,
@@ -102,6 +110,7 @@ export type DashboardSupportedResponse = z.infer<typeof dashboardSupportedRespon
 
 export const dashboardUnsupportedResponseSchema = z.object({
   zip: zipCodeSchema,
+  city: z.string().min(1).nullable().optional(),
   status: z.literal("unsupported"),
   message: z.literal(DASHBOARD_UNSUPPORTED_MESSAGE),
   nearby_supported_zips: z.array(suggestionSchema).max(MAX_SUGGESTIONS)
@@ -123,10 +132,21 @@ export const zipSuggestionsResponseSchema = z.object({
 
 export type ZipSuggestionsResponse = z.infer<typeof zipSuggestionsResponseSchema>;
 
+export const locationResolveResponseSchema = z.object({
+  query: z.string().min(1),
+  resolved_zip: zipCodeSchema,
+  match_type: z.enum(["zip", "town"]),
+  is_ambiguous: z.boolean(),
+  candidate_zips: z.array(zipCodeSchema).max(MAX_SUGGESTIONS)
+});
+
+export type LocationResolveResponse = z.infer<typeof locationResolveResponseSchema>;
+
 export const apiErrorCodeSchema = z.enum([
   "INVALID_ZIP",
   "INVALID_QUERY",
   "ZIP_NOT_FOUND",
+  "LOCATION_NOT_FOUND",
   "NON_NJ_ZIP",
   "INTERNAL_ERROR"
 ]);

@@ -4,6 +4,7 @@ export const CACHE_NAMESPACE = "zipmarket:m4";
 export const DEFAULT_CACHE_DATA_VERSION = "1";
 export const DEFAULT_DASHBOARD_CACHE_TTL_SECONDS = 3600;
 export const DEFAULT_SUGGESTIONS_CACHE_TTL_SECONDS = 3600;
+export const DEFAULT_LOCATION_RESOLVE_CACHE_TTL_SECONDS = 3600;
 
 interface UpstashCommandResponse<T> {
   result?: T;
@@ -56,6 +57,13 @@ export function buildSuggestionsCacheKey(input: {
   dataVersion: string;
 }): string {
   return `${CACHE_NAMESPACE}:suggestions:${input.dataVersion}:${input.zip}`;
+}
+
+export function buildLocationResolveCacheKey(input: {
+  query: string;
+  dataVersion: string;
+}): string {
+  return `${CACHE_NAMESPACE}:location-resolve:${input.dataVersion}:${input.query}`;
 }
 
 class NoopApiCache implements ApiCache {

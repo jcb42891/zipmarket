@@ -35,6 +35,7 @@ import {
   formatCountCompact,
   formatCurrency,
   formatCurrencyCompact,
+  formatLocationHeading,
   formatPercent,
   formatRatio,
   toSegmentLabel
@@ -48,8 +49,11 @@ import {
 } from "../lib/dashboard/date-range";
 import {
   buildDashboardDateQuickOptions,
-  parseDashboardDateExpression
+  type DashboardDateQuickOption
 } from "../lib/dashboard/date-range-shortcuts";
+import {
+  resolveActiveDateQuickOptionKey
+} from "../lib/dashboard/date-range-control-state";
 import { reduceInfoChipOpenState } from "../lib/dashboard/info-chip";
 import { DashboardDisclaimer } from "./dashboard-disclaimer";
 import { ZipSearchForm } from "./zip-search-form";
@@ -70,10 +74,6 @@ interface DateRangeControlProps {
   maxDate: string;
   isLoading: boolean;
   onChange: (range: DashboardDateRange) => void;
-}
-
-function isSameDateRange(left: DashboardDateRange, right: DashboardDateRange): boolean {
-  return left.startDate === right.startDate && left.endDate === right.endDate;
 }
 
 function asNumber(value: unknown): number | null {
@@ -200,8 +200,6 @@ function DateRangeControl({
   isLoading,
   onChange
 }: DateRangeControlProps) {
-  const [shortcutExpression, setShortcutExpression] = useState("");
-  const [shortcutError, setShortcutError] = useState<string | null>(null);
   const dateBounds = useMemo(
     () => ({
       minDate,
@@ -213,90 +211,45 @@ function DateRangeControl({
     () => buildDashboardDateQuickOptions(maxDate, dateBounds),
     [maxDate, dateBounds]
   );
+  const activeQuickOptionKey = useMemo(
+    () => resolveActiveDateQuickOptionKey(quickOptions, dateRange),
+    [dateRange, quickOptions]
+  );
 
-  useEffect(() => {
-    setShortcutError(null);
-  }, [dateRange]);
-
-  function applyShortcut(expression: string) {
-    const parsedRange = parseDashboardDateExpression(expression, maxDate, dateBounds);
-    if (parsedRange === null) {
-      setShortcutError("Try 90d, 3m, 6m, or YYYY-MM-DD to YYYY-MM-DD.");
-      return;
-    }
-
-    onChange(parsedRange);
-    setShortcutError(null);
+  function onPresetClick(option: DashboardDateQuickOption) {
+    onChange(option.range);
   }
 
   return (
-    <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-raised)] p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-subtle)]">
-        Date Range
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {quickOptions.map((option) => {
-          const isActive = isSameDateRange(option.range, dateRange);
-          return (
-            <button
-              key={option.key}
-              type="button"
-              disabled={isLoading}
-              onClick={() => {
-                setShortcutExpression(option.expression);
-                onChange(option.range);
-                setShortcutError(null);
-              }}
-              className={`rounded-full border px-3 py-1 text-sm font-semibold transition ${
-                isActive
-                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
-              } disabled:cursor-not-allowed disabled:opacity-70`}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-      <form
-        className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
-        onSubmit={(event) => {
-          event.preventDefault();
-          applyShortcut(shortcutExpression);
-        }}
-      >
-        <label className="flex-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-subtle)]">
-          Quick Entry
-          <input
-            type="text"
-            value={shortcutExpression}
-            disabled={isLoading}
-            onChange={(event) => setShortcutExpression(event.currentTarget.value)}
-            placeholder="Examples: 90d, 3m, 6m, 12m"
-            className="mt-1 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium normal-case tracking-normal text-[var(--text-primary)] placeholder:text-[var(--text-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="rounded-[var(--radius-sm)] border border-[var(--accent)] bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          Apply
-        </button>
-      </form>
-      <p
-        className={`mt-2 text-xs ${
-          shortcutError ? "text-[var(--danger)]" : "text-[var(--text-subtle)]"
-        }`}
-      >
-        {shortcutError ??
-          "Use relative shortcuts, named ranges, or explicit ranges while keeping manual date pickers below."}
-      </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-subtle)]">
-          Start Date
+    <div className="mt-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-raised)] p-1.5">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-1">
+          <p className="mr-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+            Date Range
+          </p>
+          {quickOptions.map((option) => {
+            const isActive = option.key === activeQuickOptionKey;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                disabled={isLoading}
+                onClick={() => onPresetClick(option)}
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-5 transition ${
+                  isActive
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+                } disabled:cursor-not-allowed disabled:opacity-70`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-1 sm:shrink-0">
           <input
             type="date"
+            aria-label="Start date"
             min={minDate}
             max={maxDate}
             value={dateRange.startDate}
@@ -313,13 +266,14 @@ function DateRangeControl({
                   dateRange.endDate < nextStartDate ? nextStartDate : dateRange.endDate
               });
             }}
-            className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium normal-case tracking-normal text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="h-7 w-[132px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs font-medium text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
           />
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-subtle)]">
-          End Date
+          <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--text-subtle)]">
+            to
+          </span>
           <input
             type="date"
+            aria-label="End date"
             min={minDate}
             max={maxDate}
             value={dateRange.endDate}
@@ -336,9 +290,9 @@ function DateRangeControl({
                 endDate: nextEndDate
               });
             }}
-            className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium normal-case tracking-normal text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="h-7 w-[132px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs font-medium text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
           />
-        </label>
+        </div>
       </div>
     </div>
   );
@@ -474,7 +428,7 @@ function SupportedDashboard({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-[var(--font-display)] text-3xl font-semibold tracking-tight">
-            ZIP {payload.zip}
+            {formatLocationHeading(payload.zip, payload.city)}
           </h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
             Latest period ending {rangedPayload.latest_period_end}. Segment:{" "}
@@ -809,7 +763,7 @@ function renderStateCard(
     return (
       <section className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-elevated)]">
         <h1 className="font-[var(--font-display)] text-3xl font-semibold tracking-tight">
-          ZIP {state.payload.zip}
+          {formatLocationHeading(state.payload.zip, state.payload.city)}
         </h1>
         <p className="mt-2 text-base text-[var(--text-muted)]">
           {state.payload.message}. Try one of these nearby supported ZIP codes:
@@ -927,8 +881,8 @@ export function ZipDashboardShell({ zipParam }: ZipDashboardShellProps) {
         <ZipSearchForm
           initialZip={state.zip}
           size="compact"
-          submitLabel="Search ZIP"
-          helperText="Dashboard supports NJ ZIP codes only."
+          submitLabel="Search"
+          helperText="Search by NJ ZIP or town name."
         />
       </section>
       {renderStateCard(

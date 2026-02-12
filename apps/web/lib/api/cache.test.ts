@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildDashboardCacheKey,
+  buildLocationResolveCacheKey,
   buildSuggestionsCacheKey,
   CACHE_NAMESPACE,
   createApiCache,
@@ -40,6 +41,15 @@ test("buildSuggestionsCacheKey includes namespace and version", () => {
   });
 
   assert.equal(cacheKey, `${CACHE_NAMESPACE}:suggestions:abc:07001`);
+});
+
+test("buildLocationResolveCacheKey includes namespace and normalized query", () => {
+  const cacheKey = buildLocationResolveCacheKey({
+    query: "morristown",
+    dataVersion: "abc"
+  });
+
+  assert.equal(cacheKey, `${CACHE_NAMESPACE}:location-resolve:abc:morristown`);
 });
 
 test("createApiCache falls back to no-op cache without Redis credentials", async () => {

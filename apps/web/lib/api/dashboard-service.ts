@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { NJ_STATE_CODE } from "@zipmarket/shared";
+import { NJ_STATE_CODE, ZIP_CODE_REGEX } from "@zipmarket/shared";
 
 import {
   DASHBOARD_DISCLAIMER,
@@ -8,6 +8,7 @@ import {
   DASHBOARD_WINDOW_TYPE,
   MAX_SUGGESTIONS,
   type DashboardLookupInput,
+  type LocationResolveResponse,
   type DashboardSupportedResponse,
   type DashboardUnsupportedResponse,
   type ZipSuggestion,
@@ -17,6 +18,7 @@ import {
 interface ZipContextRow {
   zip_code: string;
   state_code: string;
+  city: string | null;
   is_nj: boolean;
   is_supported: boolean;
 }
@@ -60,6 +62,11 @@ interface NearestSupportedZipRow {
   distance_miles: number | string;
 }
 
+interface TownZipCandidateRow {
+  zip_code: string;
+  is_supported: boolean;
+}
+
 interface ParsedLatestDashboardRow {
   periodEnd: string;
   medianSalePrice: number | null;
@@ -97,6 +104,7 @@ interface ParsedDashboardSeriesRow {
 interface ZipContext {
   zipCode: string;
   stateCode: string;
+  city: string | null;
   isNj: boolean;
   isSupported: boolean;
 }
@@ -126,6 +134,11 @@ export type ZipSuggestionsFetchResult =
   | { type: "non_nj" }
   | { type: "zip_not_found" };
 
+export type LocationResolveFetchResult =
+  | { type: "resolved"; payload: LocationResolveResponse }
+  | { type: "non_nj" }
+  | { type: "location_not_found" };
+
 export const DEFAULT_LOCAL_DATABASE_URL =
   "postgresql://zipmarket:zipmarket@127.0.0.1:5433/zipmarket";
 
@@ -133,6 +146,7 @@ const ZIP_CONTEXT_SQL = `
 SELECT
   BTRIM(zip_code) AS zip_code,
   BTRIM(state_code) AS state_code,
+  NULLIF(BTRIM(city), '') AS city,
   is_nj,
   is_supported
 FROM dim_zip
@@ -188,6 +202,18 @@ LIMIT $3
 const FIND_NEAREST_SUPPORTED_ZIPS_SQL = `
 SELECT zip_code, distance_miles
 FROM find_nearest_supported_zips($1::char(5), $2)
+`;
+
+const FIND_TOWN_ZIP_CANDIDATES_SQL = `
+SELECT
+  BTRIM(zip_code) AS zip_code,
+  is_supported
+FROM dim_zip
+WHERE is_nj = TRUE
+  AND city IS NOT NULL
+  AND REGEXP_REPLACE(LOWER(BTRIM(city)), '\\s+', ' ', 'g') = $1
+ORDER BY is_supported DESC, BTRIM(zip_code) ASC
+LIMIT $2
 `;
 
 function resolveDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string {
@@ -288,6 +314,7 @@ function parseZipContext(row: ZipContextRow): ZipContext {
   return {
     zipCode: parseRequiredString(row.zip_code, "zip_code"),
     stateCode: parseRequiredString(row.state_code, "state_code"),
+    city: parseOptionalString(row.city, "city"),
     isNj: row.is_nj === true,
     isSupported: row.is_supported === true
   };
@@ -348,7 +375,7 @@ function parseDistanceMiles(value: unknown): number {
 
 function normalizeZipCode(zipCode: string): string {
   const normalized = zipCode.trim();
-  if (!/^\d{5}$/.test(normalized)) {
+  if (!ZIP_CODE_REGEX.test(normalized)) {
     throw new Error(`Expected zipCode to be a 5-digit ZIP value, received "${zipCode}".`);
   }
 
@@ -399,6 +426,20 @@ function toPercent(value: number | null): number | null {
   return value * 100;
 }
 
+function normalizeLocationQuery(rawQuery: string): string {
+  return parseRequiredString(rawQuery, "query").replace(/\s+/g, " ");
+}
+
+function normalizeTownQuery(rawQuery: string): string {
+  const normalized = normalizeLocationQuery(rawQuery)
+    .replace(/\s*,\s*(nj|new jersey)$/i, "")
+    .replace(/\s+(nj|new jersey)$/i, "")
+    .trim()
+    .toLowerCase();
+
+  return normalized;
+}
+
 async function getZipContext(executor: SqlExecutor, zip: string): Promise<ZipContext | null> {
   const result = await executor.query<ZipContextRow>(ZIP_CONTEXT_SQL, [zip]);
   const row = result.rows[0];
@@ -412,16 +453,46 @@ async function getZipContext(executor: SqlExecutor, zip: string): Promise<ZipCon
 
 async function getUnsupportedPayload(
   executor: SqlExecutor,
-  zip: string
+  zip: string,
+  city: string | null
 ): Promise<DashboardUnsupportedResponse> {
   const suggestions = await findNearestSupportedZips(executor, zip, MAX_SUGGESTIONS);
 
   return {
     zip,
+    ...(city ? { city } : {}),
     status: "unsupported",
     message: DASHBOARD_UNSUPPORTED_MESSAGE,
     nearby_supported_zips: toSuggestionsPayload(suggestions)
   };
+}
+
+async function findTownZipCandidates(
+  executor: SqlExecutor,
+  townQuery: string,
+  maxResults: number = MAX_SUGGESTIONS
+): Promise<string[]> {
+  const normalizedTownQuery = normalizeTownQuery(townQuery);
+  const normalizedMaxResults = normalizeMaxResults(maxResults);
+
+  if (!normalizedTownQuery) {
+    return [];
+  }
+
+  const result = await executor.query<TownZipCandidateRow>(FIND_TOWN_ZIP_CANDIDATES_SQL, [
+    normalizedTownQuery,
+    normalizedMaxResults
+  ]);
+
+  const uniqueZipCodes = new Set<string>();
+  for (const row of result.rows) {
+    const zipCode = parseRequiredString(row.zip_code, "zip_code");
+    if (ZIP_CODE_REGEX.test(zipCode)) {
+      uniqueZipCodes.add(zipCode);
+    }
+  }
+
+  return [...uniqueZipCodes];
 }
 
 export async function fetchDashboardWithExecutor(
@@ -440,7 +511,7 @@ export async function fetchDashboardWithExecutor(
   if (!zipContext.isSupported) {
     return {
       type: "unsupported",
-      payload: await getUnsupportedPayload(executor, input.zip)
+      payload: await getUnsupportedPayload(executor, input.zip, zipContext.city)
     };
   }
 
@@ -453,7 +524,7 @@ export async function fetchDashboardWithExecutor(
   if (!latestRow) {
     return {
       type: "unsupported",
-      payload: await getUnsupportedPayload(executor, input.zip)
+      payload: await getUnsupportedPayload(executor, input.zip, zipContext.city)
     };
   }
 
@@ -489,6 +560,7 @@ export async function fetchDashboardWithExecutor(
     type: "supported",
     payload: {
       zip: input.zip,
+      ...(zipContext.city ? { city: zipContext.city } : {}),
       status: "supported",
       segment: input.segment,
       latest_period_end: parsedLatestRow.periodEnd,
@@ -570,6 +642,51 @@ export async function fetchZipSuggestionsWithExecutor(
   };
 }
 
+export async function fetchLocationResolutionWithExecutor(
+  executor: SqlExecutor,
+  query: string
+): Promise<LocationResolveFetchResult> {
+  const normalizedQuery = normalizeLocationQuery(query);
+
+  if (ZIP_CODE_REGEX.test(normalizedQuery)) {
+    const zipContext = await getZipContext(executor, normalizedQuery);
+    if (!zipContext) {
+      return { type: "location_not_found" };
+    }
+
+    if (!zipContext.isNj || zipContext.stateCode !== NJ_STATE_CODE) {
+      return { type: "non_nj" };
+    }
+
+    return {
+      type: "resolved",
+      payload: {
+        query: normalizedQuery,
+        resolved_zip: zipContext.zipCode,
+        match_type: "zip",
+        is_ambiguous: false,
+        candidate_zips: [zipContext.zipCode]
+      }
+    };
+  }
+
+  const candidates = await findTownZipCandidates(executor, normalizedQuery, MAX_SUGGESTIONS);
+  if (candidates.length === 0) {
+    return { type: "location_not_found" };
+  }
+
+  return {
+    type: "resolved",
+    payload: {
+      query: normalizedQuery,
+      resolved_zip: candidates[0],
+      match_type: "town",
+      is_ambiguous: candidates.length > 1,
+      candidate_zips: candidates
+    }
+  };
+}
+
 async function withDatabaseExecutor<T>(
   callback: (executor: SqlExecutor) => Promise<T>,
   databaseUrl: string = resolveDatabaseUrl()
@@ -596,4 +713,14 @@ export async function fetchZipSuggestions(
   databaseUrl: string = resolveDatabaseUrl()
 ): Promise<ZipSuggestionsFetchResult> {
   return withDatabaseExecutor((executor) => fetchZipSuggestionsWithExecutor(executor, zip), databaseUrl);
+}
+
+export async function fetchLocationResolution(
+  query: string,
+  databaseUrl: string = resolveDatabaseUrl()
+): Promise<LocationResolveFetchResult> {
+  return withDatabaseExecutor(
+    (executor) => fetchLocationResolutionWithExecutor(executor, query),
+    databaseUrl
+  );
 }

@@ -6,6 +6,7 @@ import {
   METRIC_TOOLTIP_COPY,
   buildChartRows,
   buildKpiCards,
+  formatLocationHeading,
   formatCount,
   formatCurrency,
   formatPeriodLabel,
@@ -93,6 +94,12 @@ test("toSegmentLabel maps segment keys to user-facing labels", () => {
   assert.equal(toSegmentLabel("single_family"), "Single-family");
   assert.equal(toSegmentLabel("condo_coop"), "Condo/co-op");
   assert.equal(toSegmentLabel("townhouse"), "Townhouse");
+});
+
+test("formatLocationHeading returns town plus ZIP when city is present", () => {
+  assert.equal(formatLocationHeading("07960", "Morristown"), "Morristown (ZIP 07960)");
+  assert.equal(formatLocationHeading("07960", "  "), "ZIP 07960");
+  assert.equal(formatLocationHeading("07960", null), "ZIP 07960");
 });
 
 test("buildKpiCards returns formatted KPI values and deltas", () => {

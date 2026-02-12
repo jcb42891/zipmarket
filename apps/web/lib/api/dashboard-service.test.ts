@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   fetchDashboardWithExecutor,
+  fetchLocationResolutionWithExecutor,
   fetchZipSuggestionsWithExecutor,
   type QueryResult,
   type SqlExecutor
@@ -18,7 +19,14 @@ class FakeExecutor implements SqlExecutor {
 
   public constructor(
     private readonly handlers: {
-      zipRows?: Array<{ zip_code: string; state_code: string; is_nj: boolean; is_supported: boolean }>;
+      zipRows?: Array<{
+        zip_code: string;
+        state_code: string;
+        city?: string | null;
+        is_nj: boolean;
+        is_supported: boolean;
+      }>;
+      townRows?: Array<{ zip_code: string; is_supported: boolean }>;
       latestRows?: Array<Record<string, unknown>>;
       seriesRows?: Array<Record<string, unknown>>;
       nearestRows?: Array<{ zip_code: string; distance_miles: number | string }>;
@@ -32,6 +40,13 @@ class FakeExecutor implements SqlExecutor {
     this.calls.push({ text, params });
 
     if (text.includes("FROM dim_zip")) {
+      if (text.includes("REGEXP_REPLACE(LOWER(BTRIM(city))")) {
+        return {
+          rows: (this.handlers.townRows ?? []) as Row[],
+          rowCount: this.handlers.townRows?.length ?? 0
+        };
+      }
+
       return {
         rows: (this.handlers.zipRows ?? []) as Row[],
         rowCount: this.handlers.zipRows?.length ?? 0
@@ -65,7 +80,9 @@ class FakeExecutor implements SqlExecutor {
 
 test("fetchDashboardWithExecutor returns supported payload with aligned series arrays", async () => {
   const executor = new FakeExecutor({
-    zipRows: [{ zip_code: "07001", state_code: "NJ", is_nj: true, is_supported: true }],
+    zipRows: [
+      { zip_code: "07001", state_code: "NJ", city: "Avenel", is_nj: true, is_supported: true }
+    ],
     latestRows: [
       {
         period_end: "2025-12-31",
@@ -127,6 +144,7 @@ test("fetchDashboardWithExecutor returns supported payload with aligned series a
   }
 
   assert.equal(result.payload.status, "supported");
+  assert.equal(result.payload.city, "Avenel");
   assert.equal(result.payload.kpis.sale_to_list_ratio.over_under_pct, 1.5);
   assert.equal(result.payload.kpis.sold_over_list_pct.value_pct, 41);
   assert.deepEqual(result.payload.series.period_end, ["2025-11-30", "2025-12-31"]);
@@ -141,7 +159,9 @@ test("fetchDashboardWithExecutor returns supported payload with aligned series a
 
 test("fetchDashboardWithExecutor returns unsupported payload with nearby ZIP suggestions", async () => {
   const executor = new FakeExecutor({
-    zipRows: [{ zip_code: "07001", state_code: "NJ", is_nj: true, is_supported: false }],
+    zipRows: [
+      { zip_code: "07001", state_code: "NJ", city: "Avenel", is_nj: true, is_supported: false }
+    ],
     nearestRows: [
       { zip_code: "07002", distance_miles: "1.1" },
       { zip_code: "07003", distance_miles: 2.4 }
@@ -159,6 +179,7 @@ test("fetchDashboardWithExecutor returns unsupported payload with nearby ZIP sug
     return;
   }
 
+  assert.equal(result.payload.city, "Avenel");
   assert.equal(result.payload.message, "Data not available yet");
   assert.deepEqual(result.payload.nearby_supported_zips, [
     { zip: "07002", distance_miles: 1.1 },
@@ -232,4 +253,78 @@ test("fetchZipSuggestionsWithExecutor returns zip_not_found when ZIP is unknown"
 
   const result = await fetchZipSuggestionsWithExecutor(executor, "07001");
   assert.deepEqual(result, { type: "zip_not_found" });
+});
+
+test("fetchLocationResolutionWithExecutor resolves NJ ZIP input directly", async () => {
+  const executor = new FakeExecutor({
+    zipRows: [{ zip_code: "07001", state_code: "NJ", is_nj: true, is_supported: true }]
+  });
+
+  const result = await fetchLocationResolutionWithExecutor(executor, "07001");
+
+  assert.equal(result.type, "resolved");
+  if (result.type !== "resolved") {
+    return;
+  }
+
+  assert.deepEqual(result.payload, {
+    query: "07001",
+    resolved_zip: "07001",
+    match_type: "zip",
+    is_ambiguous: false,
+    candidate_zips: ["07001"]
+  });
+});
+
+test("fetchLocationResolutionWithExecutor resolves town input with sorted candidates", async () => {
+  const executor = new FakeExecutor({
+    townRows: [
+      { zip_code: "07960", is_supported: true },
+      { zip_code: "07961", is_supported: false }
+    ]
+  });
+
+  const result = await fetchLocationResolutionWithExecutor(executor, "Morristown");
+
+  assert.equal(result.type, "resolved");
+  if (result.type !== "resolved") {
+    return;
+  }
+
+  assert.equal(result.payload.resolved_zip, "07960");
+  assert.equal(result.payload.match_type, "town");
+  assert.equal(result.payload.is_ambiguous, true);
+  assert.deepEqual(result.payload.candidate_zips, ["07960", "07961"]);
+});
+
+test("fetchLocationResolutionWithExecutor normalizes town query suffixes", async () => {
+  const executor = new FakeExecutor({
+    townRows: [{ zip_code: "07960", is_supported: true }]
+  });
+
+  const result = await fetchLocationResolutionWithExecutor(executor, "Morristown, NJ");
+
+  assert.equal(result.type, "resolved");
+  const townLookupCall = executor.calls.find((call) =>
+    call.text.includes("REGEXP_REPLACE(LOWER(BTRIM(city))")
+  );
+  assert.equal(townLookupCall?.params?.[0], "morristown");
+});
+
+test("fetchLocationResolutionWithExecutor returns non_nj for non-NJ ZIP input", async () => {
+  const executor = new FakeExecutor({
+    zipRows: [{ zip_code: "10001", state_code: "NY", is_nj: false, is_supported: false }]
+  });
+
+  const result = await fetchLocationResolutionWithExecutor(executor, "10001");
+  assert.deepEqual(result, { type: "non_nj" });
+});
+
+test("fetchLocationResolutionWithExecutor returns location_not_found for unknown town", async () => {
+  const executor = new FakeExecutor({
+    townRows: []
+  });
+
+  const result = await fetchLocationResolutionWithExecutor(executor, "notatown");
+  assert.deepEqual(result, { type: "location_not_found" });
 });

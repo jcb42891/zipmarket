@@ -75,6 +75,15 @@ export function toSegmentLabel(segment: DashboardSegment): string {
   return segmentOption?.label ?? "All homes";
 }
 
+export function formatLocationHeading(zip: string, city?: string | null): string {
+  const normalizedCity = city?.trim() ?? "";
+  if (!normalizedCity) {
+    return `ZIP ${zip}`;
+  }
+
+  return `${normalizedCity} (ZIP ${zip})`;
+}
+
 export function formatCurrency(value: number | null): string {
   if (value === null) {
     return "No data";

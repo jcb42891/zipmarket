@@ -12,12 +12,12 @@ export default function Home() {
             Market signals for every NJ ZIP code.
           </h1>
           <p className="mt-4 max-w-xl text-base text-[var(--text-muted)] sm:text-lg">
-            Enter a ZIP code to open the dashboard shell and core state flows:
+            Enter a ZIP code or town name to open the dashboard shell and core state flows:
             supported data, unsupported NJ suggestions, and validation feedback.
           </p>
         </div>
         <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface-raised)] p-5 shadow-[var(--shadow-soft)]">
-          <ZipSearchForm helperText="Format must be 5 digits, for example 07001." />
+          <ZipSearchForm helperText="Try a ZIP like 07001 or a town like Morristown." />
         </div>
       </section>
       <section className="grid gap-4 md:grid-cols-3">

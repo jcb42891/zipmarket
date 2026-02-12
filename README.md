@@ -61,6 +61,7 @@ cp .env.example .env.local
 
 - `GET /api/v1/dashboard/{zip}?segment=all&months=36`
 - `GET /api/v1/zips/{zip}/suggestions`
+- `GET /api/v1/locations/resolve?query=morristown`
 
 Caching strategy and invalidation notes are documented in `apps/web/docs/m4-caching.md`.
 

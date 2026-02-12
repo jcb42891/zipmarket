@@ -5,8 +5,9 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 
 import {
   buildZipPath,
-  normalizeZipInput,
-  validateZipSubmission
+  normalizeLocationInput,
+  resolveLocationToZip,
+  validateLocationSubmission
 } from "../lib/ui/zip-search";
 
 interface ZipSearchFormProps {
@@ -24,26 +25,49 @@ export function ZipSearchForm({
 }: ZipSearchFormProps) {
   const router = useRouter();
   const fieldId = useId();
-  const [zipValue, setZipValue] = useState(normalizeZipInput(initialZip));
+  const [locationValue, setLocationValue] = useState(normalizeLocationInput(initialZip));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setZipValue(normalizeZipInput(initialZip));
+    setLocationValue(normalizeLocationInput(initialZip));
     setErrorMessage(null);
+    setIsSubmitting(false);
   }, [initialZip]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const submission = validateZipSubmission(zipValue);
+    const submission = validateLocationSubmission(locationValue);
     if (!submission.ok) {
-      setZipValue(submission.zip);
+      setLocationValue(submission.query);
       setErrorMessage(submission.error);
       return;
     }
 
+    if (submission.kind === "zip") {
+      setErrorMessage(null);
+      setLocationValue(submission.zip);
+      router.push(buildZipPath(submission.zip));
+      return;
+    }
+
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    const resolution = await resolveLocationToZip(submission.query);
+    setIsSubmitting(false);
+
+    if (!resolution.ok) {
+      setErrorMessage(resolution.error);
+      return;
+    }
+
     setErrorMessage(null);
-    router.push(buildZipPath(submission.zip));
+    setLocationValue(resolution.zip);
+    router.push(buildZipPath(resolution.zip));
   }
 
   const compact = size === "compact";
@@ -56,22 +80,20 @@ export function ZipSearchForm({
           compact ? "text-sm" : "text-base"
         }`}
       >
-        Enter NJ ZIP code
+        Enter NJ ZIP or town
       </label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           id={fieldId}
-          name="zip"
-          inputMode="numeric"
-          autoComplete="postal-code"
-          pattern="[0-9]{5}"
-          maxLength={5}
-          value={zipValue}
+          name="location"
+          autoComplete="off"
+          maxLength={80}
+          value={locationValue}
           onChange={(event) => {
-            setZipValue(normalizeZipInput(event.target.value));
+            setLocationValue(event.target.value);
             setErrorMessage(null);
           }}
-          placeholder="07001"
+          placeholder="07001 or Morristown"
           className={`w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] px-4 text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[color-mix(in_oklab,var(--accent)_30%,transparent)] ${
             compact ? "h-11 text-base" : "h-12 text-lg"
           }`}
@@ -80,11 +102,12 @@ export function ZipSearchForm({
         />
         <button
           type="submit"
+          disabled={isSubmitting}
           className={`shrink-0 rounded-[var(--radius-md)] bg-[var(--accent)] px-5 font-semibold text-white transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--accent)_40%,transparent)] ${
             compact ? "h-11 text-sm" : "h-12 text-base"
-          }`}
+          } disabled:cursor-not-allowed disabled:opacity-70`}
         >
-          {submitLabel}
+          {isSubmitting ? "Resolving..." : submitLabel}
         </button>
       </div>
       {errorMessage ? (
