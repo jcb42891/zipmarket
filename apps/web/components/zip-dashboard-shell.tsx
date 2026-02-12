@@ -2,7 +2,7 @@
 
 import type { DashboardSegment } from "@zipmarket/shared";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -39,6 +39,7 @@ import {
   formatRatio,
   toSegmentLabel
 } from "../lib/dashboard/dashboard-presenter";
+import { reduceInfoChipOpenState } from "../lib/dashboard/info-chip";
 import { DashboardDisclaimer } from "./dashboard-disclaimer";
 import { ZipSearchForm } from "./zip-search-form";
 
@@ -58,13 +59,66 @@ function asNumber(value: unknown): number | null {
 }
 
 function InfoChip({ copy }: { copy: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+  const tooltipId = useId();
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    function onPointerDown(event: PointerEvent) {
+      const isTargetInside = containerRef.current?.contains(event.target as Node) ?? false;
+      setIsOpen((current) =>
+        reduceInfoChipOpenState(current, {
+          type: "outside_pointer_down",
+          isTargetInside
+        })
+      );
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      setIsOpen((current) =>
+        reduceInfoChipOpenState(current, {
+          type: "keydown",
+          key: event.key
+        })
+      );
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isOpen]);
+
   return (
-    <span
-      title={copy}
-      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border-muted)] bg-[var(--surface)] text-[11px] font-semibold text-[var(--text-muted)]"
-      aria-label={copy}
-    >
-      i
+    <span ref={containerRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() =>
+          setIsOpen((current) => reduceInfoChipOpenState(current, { type: "toggle" }))
+        }
+        aria-label={copy}
+        aria-expanded={isOpen}
+        aria-controls={tooltipId}
+        aria-describedby={isOpen ? tooltipId : undefined}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border-muted)] bg-[var(--surface)] text-[11px] font-semibold text-[var(--text-muted)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+      >
+        i
+      </button>
+      {isOpen ? (
+        <span
+          id={tooltipId}
+          role="tooltip"
+          className="absolute right-0 top-[calc(100%+0.45rem)] z-20 w-64 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface)] p-3 text-xs font-medium leading-relaxed text-[var(--text-primary)] shadow-[var(--shadow-soft)]"
+        >
+          {copy}
+        </span>
+      ) : null}
     </span>
   );
 }
