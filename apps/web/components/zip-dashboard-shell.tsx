@@ -39,6 +39,13 @@ import {
   formatRatio,
   toSegmentLabel
 } from "../lib/dashboard/dashboard-presenter";
+import {
+  buildDashboardPayloadForDateRange,
+  createDefaultDashboardDateRange,
+  normalizeDateRangeSelection,
+  resolveDashboardDateBounds,
+  type DashboardDateRange
+} from "../lib/dashboard/date-range";
 import { reduceInfoChipOpenState } from "../lib/dashboard/info-chip";
 import { DashboardDisclaimer } from "./dashboard-disclaimer";
 import { ZipSearchForm } from "./zip-search-form";
@@ -51,6 +58,14 @@ interface SegmentControlProps {
   selectedSegment: DashboardSegment;
   isLoading: boolean;
   onChange: (segment: DashboardSegment) => void;
+}
+
+interface DateRangeControlProps {
+  dateRange: DashboardDateRange;
+  minDate: string;
+  maxDate: string;
+  isLoading: boolean;
+  onChange: (range: DashboardDateRange) => void;
 }
 
 function asNumber(value: unknown): number | null {
@@ -170,6 +185,70 @@ function SegmentControl({ selectedSegment, isLoading, onChange }: SegmentControl
   );
 }
 
+function DateRangeControl({
+  dateRange,
+  minDate,
+  maxDate,
+  isLoading,
+  onChange
+}: DateRangeControlProps) {
+  return (
+    <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-raised)] p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[var(--text-subtle)]">
+        Date Range
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+          Start Date
+          <input
+            type="date"
+            min={minDate}
+            max={maxDate}
+            value={dateRange.startDate}
+            disabled={isLoading}
+            onChange={(event) => {
+              const nextStartDate = event.currentTarget.value;
+              if (!nextStartDate) {
+                return;
+              }
+
+              onChange({
+                startDate: nextStartDate,
+                endDate:
+                  dateRange.endDate < nextStartDate ? nextStartDate : dateRange.endDate
+              });
+            }}
+            className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium normal-case tracking-normal text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+          End Date
+          <input
+            type="date"
+            min={minDate}
+            max={maxDate}
+            value={dateRange.endDate}
+            disabled={isLoading}
+            onChange={(event) => {
+              const nextEndDate = event.currentTarget.value;
+              if (!nextEndDate) {
+                return;
+              }
+
+              onChange({
+                startDate:
+                  dateRange.startDate > nextEndDate ? nextEndDate : dateRange.startDate,
+                endDate: nextEndDate
+              });
+            }}
+            className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium normal-case tracking-normal text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function ChartEmptyState({ message }: { message: string }) {
   return (
     <div className="flex h-[250px] items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[var(--border)] bg-[var(--surface-raised)] p-4 text-center text-sm text-[var(--text-muted)]">
@@ -261,8 +340,23 @@ function SupportedDashboard({
   isLoading: boolean;
   onSegmentChange: (segment: DashboardSegment) => void;
 }) {
-  const kpiCards = useMemo(() => buildKpiCards(payload), [payload]);
-  const chartRows = useMemo(() => buildChartRows(payload), [payload]);
+  const dateBounds = useMemo(() => resolveDashboardDateBounds(payload), [payload]);
+  const [selectedDateRange, setSelectedDateRange] = useState<DashboardDateRange>(() =>
+    createDefaultDashboardDateRange(payload)
+  );
+
+  useEffect(() => {
+    setSelectedDateRange((currentDateRange) =>
+      normalizeDateRangeSelection(currentDateRange, dateBounds)
+    );
+  }, [dateBounds]);
+
+  const rangedPayload = useMemo(
+    () => buildDashboardPayloadForDateRange(payload, selectedDateRange),
+    [payload, selectedDateRange]
+  );
+  const kpiCards = useMemo(() => buildKpiCards(rangedPayload), [rangedPayload]);
+  const chartRows = useMemo(() => buildChartRows(rangedPayload), [rangedPayload]);
 
   const hasPriceSeries = chartRows.some(
     (row) => row.medianListPrice !== null || row.medianSalePrice !== null
@@ -272,13 +366,13 @@ function SupportedDashboard({
   const hasNewListingsSeries = chartRows.some((row) => row.newListings !== null);
   const hasHomesSoldSeries = chartRows.some((row) => row.homesSold !== null);
 
-  const tone = competitivenessTone(payload.competitiveness.label);
-  const meterPercent = toCompetitivenessMeterPercent(payload.competitiveness.score);
+  const tone = competitivenessTone(rangedPayload.competitiveness.label);
+  const meterPercent = toCompetitivenessMeterPercent(rangedPayload.competitiveness.score);
   const competitivenessExplanation =
-    payload.competitiveness.explanation ??
+    rangedPayload.competitiveness.explanation ??
     "Competitiveness explanation is unavailable for this ZIP and segment.";
   const confidenceTier =
-    payload.competitiveness.confidence_tier?.replace("_", " ") ?? "not available";
+    rangedPayload.competitiveness.confidence_tier?.replace("_", " ") ?? "not available";
 
   return (
     <section className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-elevated)]">
@@ -288,8 +382,14 @@ function SupportedDashboard({
             ZIP {payload.zip}
           </h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Latest period ending {payload.latest_period_end}. Segment:{" "}
+            Latest period ending {rangedPayload.latest_period_end}. Segment:{" "}
             {toSegmentLabel(payload.segment)}.
+          </p>
+          <p className="mt-1 text-xs text-[var(--text-subtle)]">
+            Viewing {selectedDateRange.startDate} to {selectedDateRange.endDate}.
+          </p>
+          <p className="text-xs text-[var(--text-subtle)]">
+            KPI cards summarize the selected range.
           </p>
         </div>
         <p className="rounded-full border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-1 text-xs font-semibold text-[var(--text-muted)]">
@@ -301,6 +401,15 @@ function SupportedDashboard({
         selectedSegment={selectedSegment}
         isLoading={isLoading}
         onChange={onSegmentChange}
+      />
+      <DateRangeControl
+        dateRange={selectedDateRange}
+        minDate={dateBounds.minDate}
+        maxDate={dateBounds.maxDate}
+        isLoading={isLoading}
+        onChange={(nextRange) =>
+          setSelectedDateRange(normalizeDateRangeSelection(nextRange, dateBounds))
+        }
       />
 
       <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -388,12 +497,12 @@ function SupportedDashboard({
           </div>
           <div className="mt-4 flex items-center justify-between gap-3">
             <p className={`rounded-full px-3 py-1 text-sm font-semibold ${tone.badgeClass}`}>
-              {payload.competitiveness.label ?? "No label"}
+              {rangedPayload.competitiveness.label ?? "No label"}
             </p>
             <p className="text-sm text-[var(--text-muted)]">
               Score:{" "}
               <span className="font-semibold text-[var(--text-primary)]">
-                {payload.competitiveness.score ?? "N/A"}
+                {rangedPayload.competitiveness.score ?? "N/A"}
               </span>
             </p>
           </div>
